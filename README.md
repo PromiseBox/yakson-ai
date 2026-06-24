@@ -30,6 +30,12 @@ powershell -ExecutionPolicy Bypass -File scripts/start-frontend.ps1
 powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
 ```
 
+배포 환경처럼 백엔드 shared secret을 켠 경우:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -BackendSharedSecret "<secret>"
+```
+
 ## Important Behavior
 
 - 약물 저장은 식약처 DB 자동완성 후보 선택이 필수입니다.
@@ -38,6 +44,7 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
 - 분석은 사용자가 `분석하기`를 눌렀을 때 실행되고 최신 리포트로 저장됩니다.
 - 약물 목록이 저장 시점과 달라지면 백엔드가 `isStale=true`를 내려주고, 리포트 화면에서 다시 분석 필요 문구를 표시합니다.
 - 룰 근거는 리포트 화면의 근거 테이블에 표시됩니다.
+- 운영 환경에서는 `BACKEND_SHARED_SECRET`으로 FastAPI `/api/*`를 보호하고, Next.js 서버 프록시만 이 값을 전달합니다.
 
 ## Docs
 

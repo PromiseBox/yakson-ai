@@ -1,5 +1,6 @@
 param(
-  [string]$BackendBaseUrl = "http://127.0.0.1:8000"
+  [string]$BackendBaseUrl = "http://127.0.0.1:8000",
+  [string]$BackendSharedSecret = $env:BACKEND_SHARED_SECRET
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +9,8 @@ function Invoke-Json {
   param(
     [Parameter(Mandatory = $true)][string]$Method,
     [Parameter(Mandatory = $true)][string]$Uri,
-    [object]$Body = $null
+    [object]$Body = $null,
+    [hashtable]$Headers = @{}
   )
 
   $params = @{
@@ -21,6 +23,10 @@ function Invoke-Json {
     $params.Body = ($Body | ConvertTo-Json -Depth 12)
   }
 
+  if ($Headers.Count -gt 0) {
+    $params.Headers = $Headers
+  }
+
   Invoke-RestMethod @params
 }
 
@@ -30,6 +36,10 @@ function New-UnicodeText {
 }
 
 $DoseUnitTablet = New-UnicodeText @(51221)
+$BackendHeaders = @{}
+if ($BackendSharedSecret) {
+  $BackendHeaders["x-yakson-backend-secret"] = $BackendSharedSecret
+}
 
 function New-Medication {
   param(
@@ -55,7 +65,7 @@ function Invoke-Preview {
     [Parameter(Mandatory = $true)][object[]]$Medications
   )
 
-  Invoke-Json -Method Post -Uri "$BackendBaseUrl/api/analysis/preview" -Body @{
+  Invoke-Json -Method Post -Uri "$BackendBaseUrl/api/analysis/preview" -Headers $BackendHeaders -Body @{
     patient = $Patient
     medications = $Medications
   }

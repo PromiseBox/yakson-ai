@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-const backendBaseUrl = (process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000").replace(
-  /\/$/,
-  ""
-);
+import { backendBaseUrl, backendHeaders, backendUnavailableDetail } from "../_backend";
 
 type RouteContext = {
   params: Promise<{
@@ -21,10 +18,10 @@ async function proxy(request: Request, context: RouteContext) {
   try {
     const response = await fetch(targetUrl, {
       method,
-      headers: {
+      headers: backendHeaders({
         Accept: request.headers.get("accept") ?? "application/json",
         "Content-Type": request.headers.get("content-type") ?? "application/json"
-      },
+      }),
       body: hasBody ? await request.text() : undefined,
       cache: "no-store"
     });
@@ -44,8 +41,7 @@ async function proxy(request: Request, context: RouteContext) {
   } catch {
     return NextResponse.json(
       {
-        detail:
-          "백엔드 API에 연결할 수 없습니다. FastAPI를 8000번 포트로 실행하거나 BACKEND_API_BASE_URL을 설정해주세요."
+        detail: backendUnavailableDetail()
       },
       { status: 503 }
     );

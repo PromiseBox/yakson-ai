@@ -51,6 +51,15 @@ export default function MedicationInputPage() {
   }, [patientId]);
 
   useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
     const query = drugName.trim();
     if (query.length < 2 || selectedDrug?.productName === query) {
       setSearchResults([]);
@@ -72,7 +81,7 @@ export default function MedicationInputPage() {
       } catch (caught) {
         if (!ignore) {
           setSearchResults([]);
-          setSearchError(caught instanceof Error ? caught.message : "약물 검색 서버에 연결하지 못했습니다.");
+          setSearchError(caught instanceof Error ? caught.message : "약명 검색 서버에 연결하지 못했습니다.");
         }
       } finally {
         if (!ignore) {
@@ -150,7 +159,7 @@ export default function MedicationInputPage() {
     }
 
     if (!selectedDrug?.productCode) {
-      setError("식약처 DB 검색 결과에서 약물을 선택해야 DB에 저장할 수 있습니다.");
+      setError("서비스 대상 아님: 식약처 DB 자동완성 결과에서 약물을 선택해야 저장할 수 있습니다.");
       return;
     }
 
@@ -308,7 +317,7 @@ export default function MedicationInputPage() {
             <div className="guidance">
               <strong>등록 원칙</strong>
               <br />
-              약명 입력은 검색용입니다. DB에는 반드시 식약처 DB 자동완성 결과에서 선택한 약물만 저장됩니다.
+              약명 입력은 검색용입니다. 서비스는 식약처 DB 자동완성 결과에서 선택한 약물만 지원합니다.
             </div>
 
             <form className="stack" onSubmit={submitMedication}>
@@ -393,7 +402,7 @@ export default function MedicationInputPage() {
               {error && <p className="error">{error}</p>}
 
               <button className="button primary" type="submit" disabled={isAdding || !selectedDrug}>
-                {isAdding ? "DB 저장 중" : "약 정보 저장"}
+                {isAdding ? "저장 중" : "약 정보 저장"}
               </button>
             </form>
           </section>

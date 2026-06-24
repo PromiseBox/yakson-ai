@@ -47,6 +47,7 @@ Backend:
 
 ```env
 BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+BACKEND_SHARED_SECRET=
 DATABASE_URL=postgresql+psycopg://DB_USER:DB_PASSWORD@127.0.0.1:55432/yakson
 DATABASE_SCHEMA=yakson
 DATABASE_AUTO_CREATE=false
@@ -58,7 +59,10 @@ Frontend:
 ```env
 NEXT_PUBLIC_API_BASE_URL=
 BACKEND_API_BASE_URL=http://127.0.0.1:8000
+BACKEND_SHARED_SECRET=
 ```
+
+`BACKEND_SHARED_SECRET`은 운영 환경에서 필수로 설정합니다. 값이 설정되면 FastAPI는 `/api/*` 요청에 `x-yakson-backend-secret` 헤더를 요구합니다. 브라우저에는 노출하지 않고 Next.js API route에서만 백엔드로 전달합니다.
 
 ## 로컬 실행
 
@@ -82,10 +86,37 @@ powershell -ExecutionPolicy Bypass -File scripts/start-frontend.ps1
 - GCE/GKE: private IP 또는 Cloud SQL connector 사용
 - 공통: DB 계정 권한은 최소 권한 원칙으로 분리하고, 비밀번호는 Secret Manager 등 런타임 secret으로 주입
 
+현재 Cloud SQL 연결명:
+
+```text
+promisebox-yakson:asia-northeast3:yakson-postgres
+```
+
+Cloud Run 배포 시에는 로컬 proxy 명령 대신 서비스에 Cloud SQL 인스턴스를 연결합니다.
+
+```powershell
+gcloud run deploy yakson-api `
+  --source backend `
+  --region asia-northeast3 `
+  --allow-unauthenticated `
+  --add-cloudsql-instances promisebox-yakson:asia-northeast3:yakson-postgres
+```
+
+Cloud Run용 DB URL 예시:
+
+```env
+DATABASE_URL=postgresql+psycopg://DB_USER:DB_PASSWORD@/yakson?host=/cloudsql/promisebox-yakson:asia-northeast3:yakson-postgres
+```
+
+Vercel은 GitHub repo를 연결하고 Root Directory를 `frontend`로 지정합니다. 환경변수는 `BACKEND_API_BASE_URL`에 Cloud Run URL, `BACKEND_SHARED_SECRET`에 백엔드와 같은 값을 설정합니다. `NEXT_PUBLIC_API_BASE_URL`은 비워둡니다.
+
 ## 최소 배포 전 체크
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
+powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
+  -FrontendBaseUrl https://YOUR-VERCEL-URL `
+  -BackendBaseUrl https://YOUR-CLOUD-RUN-URL `
+  -BackendSharedSecret "<secret>"
 ```
 
 확인 항목:

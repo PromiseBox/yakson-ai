@@ -17,6 +17,15 @@ powershell -ExecutionPolicy Bypass -File scripts/start-frontend.ps1
 powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
 ```
 
+배포 환경처럼 shared secret이 설정된 백엔드를 직접 확인할 때:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 `
+  -FrontendBaseUrl https://YOUR-VERCEL-URL `
+  -BackendBaseUrl https://YOUR-CLOUD-RUN-URL `
+  -BackendSharedSecret "<secret>"
+```
+
 성공하면 `Smoke test passed.`가 출력됩니다.
 
 자동 확인 범위:

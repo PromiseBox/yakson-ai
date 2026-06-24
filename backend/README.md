@@ -24,6 +24,10 @@ $env:DATABASE_SCHEMA="yakson"
 $env:DATABASE_AUTO_CREATE="false"
 ```
 
+For production, set `BACKEND_SHARED_SECRET` on both the backend and frontend.
+When this value exists, FastAPI protects `/api/*` and requires the
+`x-yakson-backend-secret` header from the Next.js server-side proxy.
+
 ## Key Endpoints
 
 - `GET /health`

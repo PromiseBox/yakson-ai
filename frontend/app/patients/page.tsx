@@ -37,6 +37,15 @@ export default function PatientsPage() {
     void refreshPatients();
   }, []);
 
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   async function refreshPatients() {
     setIsLoading(true);
     setPageError("");
@@ -276,7 +285,7 @@ export default function PatientsPage() {
               <div>
                 <h2>복용자 삭제</h2>
                 <p className="subtext">
-                  이 복용자와 연결된 약물 목록이 DB에서 함께 삭제됩니다. 삭제 후에는 되돌릴 수 없습니다.
+                  이 복용자와 연결된 약물, 분석 이력이 함께 삭제됩니다. 삭제 후에는 되돌릴 수 없습니다.
                 </p>
               </div>
               <button

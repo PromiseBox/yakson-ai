@@ -1,4 +1,5 @@
 import os
+import secrets
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,10 @@ def _cors_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+BACKEND_SHARED_SECRET = os.getenv("BACKEND_SHARED_SECRET", "").strip()
+BACKEND_SHARED_SECRET_HEADER = "x-yakson-backend-secret"
+
+
 app = FastAPI(
     title="Yakson AI API",
     version="0.1.0",
@@ -31,6 +36,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_backend_shared_secret(request: Request, call_next):
+    if BACKEND_SHARED_SECRET and request.url.path.startswith("/api/") and request.method != "OPTIONS":
+        provided_secret = request.headers.get(BACKEND_SHARED_SECRET_HEADER, "")
+        if not secrets.compare_digest(provided_secret, BACKEND_SHARED_SECRET):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "인증되지 않은 백엔드 요청입니다."},
+            )
+
+    return await call_next(request)
+
 
 app.include_router(crud_router)
 app.include_router(analysis_router)

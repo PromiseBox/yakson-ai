@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-const backendBaseUrl = (process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000").replace(
-  /\/$/,
-  ""
-);
+import { backendBaseUrl, backendHeaders, backendUnavailableDetail } from "../../_backend";
 
 export async function POST(request: Request) {
   const payload = await request.json();
@@ -11,10 +8,10 @@ export async function POST(request: Request) {
   try {
     const response = await fetch(`${backendBaseUrl}/api/analysis/preview`, {
       method: "POST",
-      headers: {
+      headers: backendHeaders({
         Accept: "application/json",
         "Content-Type": "application/json"
-      },
+      }),
       body: JSON.stringify(payload),
       cache: "no-store"
     });
@@ -23,8 +20,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       {
-        detail:
-          "분석 미리보기 백엔드에 연결할 수 없습니다. FastAPI를 8000번 포트로 실행하거나 BACKEND_API_BASE_URL을 설정해주세요."
+        detail: backendUnavailableDetail("분석 서버")
       },
       { status: 503 }
     );

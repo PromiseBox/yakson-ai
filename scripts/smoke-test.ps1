@@ -1,6 +1,7 @@
 param(
   [string]$FrontendBaseUrl = "http://127.0.0.1:3000",
-  [string]$BackendBaseUrl = "http://127.0.0.1:8000"
+  [string]$BackendBaseUrl = "http://127.0.0.1:8000",
+  [string]$BackendSharedSecret = $env:BACKEND_SHARED_SECRET
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,7 +10,8 @@ function Invoke-Json {
   param(
     [Parameter(Mandatory = $true)][string]$Method,
     [Parameter(Mandatory = $true)][string]$Uri,
-    [object]$Body = $null
+    [object]$Body = $null,
+    [hashtable]$Headers = @{}
   )
 
   $params = @{
@@ -20,6 +22,10 @@ function Invoke-Json {
   if ($null -ne $Body) {
     $params.ContentType = "application/json; charset=utf-8"
     $params.Body = ($Body | ConvertTo-Json -Depth 12)
+  }
+
+  if ($Headers.Count -gt 0) {
+    $params.Headers = $Headers
   }
 
   Invoke-RestMethod @params
@@ -35,14 +41,18 @@ $CategoryInternal = New-UnicodeText @(45236, 44284)
 $CategorySurgery = New-UnicodeText @(50808, 44284)
 $DoseUnitTablet = New-UnicodeText @(51221)
 $patientId = $null
+$BackendHeaders = @{}
+if ($BackendSharedSecret) {
+  $BackendHeaders["x-yakson-backend-secret"] = $BackendSharedSecret
+}
 
 try {
-  $health = Invoke-Json -Method Get -Uri "$BackendBaseUrl/health"
+  $health = Invoke-Json -Method Get -Uri "$BackendBaseUrl/health" -Headers $BackendHeaders
   if ($health.status -ne "ok") {
     throw "Backend health check failed."
   }
 
-  $dbHealth = Invoke-Json -Method Get -Uri "$BackendBaseUrl/api/db/health"
+  $dbHealth = Invoke-Json -Method Get -Uri "$BackendBaseUrl/api/db/health" -Headers $BackendHeaders
   if ($dbHealth.database -ne "reachable") {
     throw "Database health check failed."
   }

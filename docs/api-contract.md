@@ -7,6 +7,7 @@
 - Frontend proxy: `http://127.0.0.1:3000/api`
 - FastAPI backend: `http://127.0.0.1:8000/api`
 - Next proxy target: `BACKEND_API_BASE_URL`
+- Backend shared secret header: `x-yakson-backend-secret`
 
 ## Principles
 
@@ -15,6 +16,7 @@
 - AI/LLM 기능은 현재 범위에서 제외합니다.
 - 분석 결과는 `분석하기` 실행 시 최신 DASHBOARD 리포트로 저장됩니다.
 - 모든 경고는 룰 근거 테이블과 source record id를 포함해야 합니다.
+- 운영 환경에서는 `BACKEND_SHARED_SECRET`이 설정된 경우 FastAPI `/api/*`가 shared secret header를 요구합니다. `/health`는 배포 상태 확인용으로 공개 유지합니다.
 
 ## Health
 

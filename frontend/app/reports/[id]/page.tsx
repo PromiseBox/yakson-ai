@@ -117,7 +117,7 @@ export default function PatientDashboardPage() {
 
     if (!canAnalyze) {
       setReport(null);
-      setReportError("식약처 DB 자동완성에서 선택된 약물만 분석할 수 있습니다. 미등록 약물은 서비스 대상 아님으로 처리됩니다.");
+      setReportError("서비스 대상 아님: 식약처 DB 자동완성에서 선택된 약물만 분석할 수 있습니다.");
       return;
     }
 
@@ -235,14 +235,14 @@ export default function PatientDashboardPage() {
                 <div className="guidance caution" style={{ marginTop: 12 }}>
                   <strong>과거 리포트를 보고 있습니다</strong>
                   <br />
-                  현재 화면은 최신 리포트가 아닙니다. 현재 약물 기준으로 다시 확인하려면 다시 분석하기를 눌러주세요.
+                  현재 화면은 최신 리포트가 아닙니다. 현재 약물 기준으로 확인하려면 다시 분석하기를 눌러주세요.
                 </div>
               )}
               {report && isReportStale && (
                 <div className="guidance caution" style={{ marginTop: 12 }}>
                   <strong>다시 분석이 필요합니다</strong>
                   <br />
-                  현재 약물 목록과 이 리포트의 저장 시점 약물 목록이 다릅니다. 최신 결과를 보려면 다시 분석해주세요.
+                  현재 약물 목록과 이 리포트의 저장 시점 약물 목록이 다릅니다. 최신 결과를 보려면 다시 분석하기를 눌러주세요.
                 </div>
               )}
             </section>

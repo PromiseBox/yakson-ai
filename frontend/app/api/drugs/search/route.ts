@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-const backendBaseUrl = (process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000").replace(
-  /\/$/,
-  ""
-);
+import { backendBaseUrl, backendHeaders, backendUnavailableDetail } from "../../_backend";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -18,9 +15,9 @@ export async function GET(request: Request) {
     const response = await fetch(
       `${backendBaseUrl}/api/drugs/search?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(limit)}`,
       {
-        headers: {
+        headers: backendHeaders({
           Accept: "application/json"
-        },
+        }),
         cache: "no-store"
       }
     );
@@ -46,8 +43,7 @@ export async function GET(request: Request) {
   } catch {
     return NextResponse.json(
       {
-        detail:
-          "약명 검색 백엔드에 연결할 수 없습니다. FastAPI를 8000번 포트로 실행하거나 BACKEND_API_BASE_URL을 설정해주세요."
+        detail: backendUnavailableDetail("약명 검색 서버")
       },
       { status: 503 }
     );
