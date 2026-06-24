@@ -1,0 +1,383 @@
+"use client";
+
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
+
+import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
+import { sexLabel } from "@/lib/app-store";
+import {
+  createPatientOnServer,
+  deletePatientOnServer,
+  fetchAnalysisHistory,
+  listPatientMedications,
+  listPatients,
+  updatePatientOnServer
+} from "@/lib/api";
+import { PatientRecord, Sex } from "@/lib/types";
+
+type SheetMode = "add" | "edit" | null;
+
+export default function PatientsPage() {
+  const [patients, setPatients] = useState<PatientRecord[]>([]);
+  const [medicationCounts, setMedicationCounts] = useState<Record<string, number>>({});
+  const [latestAnalysisDates, setLatestAnalysisDates] = useState<Record<string, string | null>>({});
+  const [mode, setMode] = useState<SheetMode>(null);
+  const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PatientRecord | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [ageYears, setAgeYears] = useState("");
+  const [sex, setSex] = useState<Sex>("FEMALE");
+  const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    void refreshPatients();
+  }, []);
+
+  async function refreshPatients() {
+    setIsLoading(true);
+    setPageError("");
+    try {
+      const nextPatients = await listPatients();
+      setPatients(nextPatients);
+      const rows = await Promise.all(
+        nextPatients.map(async (patient) => {
+          const [medications, history] = await Promise.all([
+            listPatientMedications(patient.id),
+            fetchAnalysisHistory(patient.id, 1)
+          ]);
+          return {
+            id: patient.id,
+            medicationCount: medications.length,
+            latestAnalysisAt: history[0]?.createdAt ?? null
+          };
+        })
+      );
+      setMedicationCounts(Object.fromEntries(rows.map((row) => [row.id, row.medicationCount])));
+      setLatestAnalysisDates(Object.fromEntries(rows.map((row) => [row.id, row.latestAnalysisAt])));
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "복용자 목록을 불러오지 못했습니다.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function openAddSheet() {
+    setSelectedPatient(null);
+    setDisplayName("");
+    setAgeYears("");
+    setSex("FEMALE");
+    setError("");
+    setNotice("");
+    setMode("add");
+  }
+
+  function openEditSheet(patient: PatientRecord) {
+    setSelectedPatient(patient);
+    setDisplayName(patient.displayName);
+    setAgeYears(String(patient.ageYears));
+    setSex(patient.sex);
+    setError("");
+    setNotice("");
+    setMode("edit");
+  }
+
+  function closeSheet() {
+    if (isSaving) {
+      return;
+    }
+    setMode(null);
+    setSelectedPatient(null);
+    setError("");
+  }
+
+  async function submitPatient(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!mode) {
+      return;
+    }
+
+    const trimmedName = displayName.trim();
+    const parsedAge = Number(ageYears);
+    if (!trimmedName || !ageYears || Number.isNaN(parsedAge) || parsedAge <= 0) {
+      setError("성명, 나이, 성별을 모두 입력해주세요.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      if (mode === "add") {
+        await createPatientOnServer({ displayName: trimmedName, ageYears: parsedAge, sex });
+        setNotice("복용자를 저장했습니다.");
+      } else if (selectedPatient) {
+        await updatePatientOnServer(selectedPatient.id, { displayName: trimmedName, ageYears: parsedAge, sex });
+        setNotice("복용자 정보를 수정했습니다.");
+      }
+      setMode(null);
+      setSelectedPatient(null);
+      await refreshPatients();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "복용자 정보를 저장하지 못했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function deletePatient() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setIsSaving(true);
+    setPageError("");
+    setNotice("");
+    try {
+      await deletePatientOnServer(deleteTarget.id);
+      setNotice("복용자를 삭제했습니다.");
+      setDeleteTarget(null);
+      await refreshPatients();
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "복용자를 삭제하지 못했습니다.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const action = (
+    <button className="button primary" type="button" onClick={openAddSheet}>
+      복용자 추가
+    </button>
+  );
+
+  return (
+    <AppShell title="복용자 관리" subtitle="입력 - DB 저장 목록" action={action}>
+      {isLoading && <LoadingState />}
+      {pageError && <p className="error">{pageError}</p>}
+      {notice && <p className="success">{notice}</p>}
+
+      {!isLoading && (
+        <div className="guidance" style={{ marginBottom: 16 }}>
+          <strong>현재 저장 방식</strong>
+          <br />
+          복용자와 약물 목록은 Cloud SQL DB에 저장됩니다. 약물은 식약처 DB 자동완성에서 선택된 항목만 저장할 수 있습니다.
+        </div>
+      )}
+
+      {!isLoading && patients.length === 0 && (
+        <EmptyState
+          title="등록된 복용자가 없습니다"
+          description="복용자를 추가한 뒤 약 정보 입력 화면에서 식약처 DB 검색 결과를 선택해주세요."
+          action={
+            <button className="button primary" type="button" onClick={openAddSheet}>
+              복용자 추가
+            </button>
+          }
+        />
+      )}
+
+      {!isLoading && patients.length > 0 && (
+        <div className="cardGrid">
+          {patients.map((patient) => (
+            <PatientCard
+              key={patient.id}
+              latestAnalysisAt={latestAnalysisDates[patient.id] ?? null}
+              medicationCount={medicationCounts[patient.id] ?? 0}
+              patient={patient}
+              onEdit={() => openEditSheet(patient)}
+              onDelete={() => setDeleteTarget(patient)}
+            />
+          ))}
+        </div>
+      )}
+
+      {mode && (
+        <div className="modalBackdrop" role="dialog" aria-modal="true">
+          <form className="sheet" onSubmit={submitPatient}>
+            <div className="sheetHeader">
+              <div>
+                <h2>{mode === "add" ? "복용자 추가" : "복용자 수정"}</h2>
+                <p className="subtext">
+                  {mode === "add"
+                    ? "성명, 나이, 성별을 입력하면 DB에 저장됩니다."
+                    : "성명, 나이, 성별을 수정하면 DB에 반영됩니다."}
+                </p>
+              </div>
+              <button className="closeButton" type="button" onClick={closeSheet} aria-label="닫기">
+                x
+              </button>
+            </div>
+
+            <div className="stack">
+              <label className="fieldLabel">
+                성명
+                <input
+                  className="input"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="예: 홍길순 할머니"
+                />
+              </label>
+
+              <label className="fieldLabel">
+                나이
+                <input
+                  className="input"
+                  value={ageYears}
+                  onChange={(event) => setAgeYears(event.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  placeholder="예: 78"
+                />
+              </label>
+
+              <div className="fieldLabel">
+                성별
+                <div className="segmented">
+                  {[
+                    ["FEMALE", "여성"],
+                    ["MALE", "남성"],
+                    ["UNKNOWN", "미입력"]
+                  ].map(([value, label]) => (
+                    <button
+                      className={`segment ${sex === value ? "selected" : ""}`}
+                      key={value}
+                      type="button"
+                      onClick={() => setSex(value as Sex)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {error && <p className="error">{error}</p>}
+
+            <div className="sheetActions">
+              <button className="button secondary" type="button" onClick={closeSheet} disabled={isSaving}>
+                취소
+              </button>
+              <button className="button primary" type="submit" disabled={isSaving}>
+                {isSaving ? "저장 중" : "저장"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="modalBackdrop" role="alertdialog" aria-modal="true">
+          <div className="sheet">
+            <div className="sheetHeader">
+              <div>
+                <h2>복용자 삭제</h2>
+                <p className="subtext">
+                  이 복용자와 연결된 약물 목록이 DB에서 함께 삭제됩니다. 삭제 후에는 되돌릴 수 없습니다.
+                </p>
+              </div>
+              <button
+                className="closeButton"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                aria-label="닫기"
+                disabled={isSaving}
+              >
+                x
+              </button>
+            </div>
+            <div className="sheetActions">
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isSaving}
+              >
+                취소
+              </button>
+              <button className="button danger" type="button" onClick={deletePatient} disabled={isSaving}>
+                {isSaving ? "삭제 중" : "삭제 확인"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function PatientCard({
+  patient,
+  latestAnalysisAt,
+  medicationCount,
+  onEdit,
+  onDelete
+}: {
+  patient: PatientRecord;
+  latestAnalysisAt: string | null;
+  medicationCount: number;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const canAnalyze = medicationCount > 0;
+
+  return (
+    <article className="patientCard">
+      <div className="patientCardTop">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="avatar">{patient.displayName.slice(0, 1)}</span>
+          <div>
+            <h3>{patient.displayName}</h3>
+            <div className="meta">
+              <span>{patient.ageYears}세</span>
+              <span>{sexLabel(patient.sex)}</span>
+              <span>분석 목록 {medicationCount}개</span>
+            </div>
+          </div>
+        </div>
+        <span className={`pill ${canAnalyze ? "normal" : "caution"}`}>
+          {canAnalyze ? "분석 가능" : "약물 선택 필요"}
+        </span>
+      </div>
+
+      <div className="meta">
+        <span>최근 수정 {new Date(patient.updatedAt).toLocaleDateString("ko-KR")}</span>
+        <span>마지막 분석 {formatDateTime(latestAnalysisAt)}</span>
+      </div>
+
+      <div className="patientCardTop">
+        <div className="segmented">
+          <button className="button small secondary" type="button" onClick={onEdit}>
+            수정
+          </button>
+          <button className="button small danger" type="button" onClick={onDelete}>
+            삭제
+          </button>
+        </div>
+        <Link className="button small primary" href={`/patients/${patient.id}/medications`}>
+          약 입력
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "없음";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}

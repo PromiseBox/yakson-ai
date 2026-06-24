@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.venv/
+.pnpm-store/
+
+# Build outputs
+.next/
+dist/
+build/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Local agent/work artifacts
+.agents/
+.codex/
+work/
+
+# Internal source materials kept outside the deployment repo
+*.pptx
+화면 설계서*.md
