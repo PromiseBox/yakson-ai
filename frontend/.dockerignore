@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.local
+.pnpm-store
+npm-debug.log
+pnpm-debug.log
+yarn-error.log
+Dockerfile
+.dockerignore

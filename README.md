@@ -52,4 +52,5 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1 -BackendSharedSe
 - Rule validation: `docs/rule-validation.md`
 - Smoke test: `docs/smoke-test.md`
 - Deployment notes: `docs/deployment-notes.md`
+- Cloud Run deployment: `docs/cloud-run-deployment.md`
 - Codex handoff: `docs/codex-handoff.md`
