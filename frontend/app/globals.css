@@ -1708,6 +1708,89 @@ h3 {
   line-height: 1.5;
 }
 
+.yk-feedback-state {
+  border: 1px solid var(--yk-line);
+  border-radius: var(--yk-radius-lg);
+  background: var(--yk-surface);
+  padding: 24px;
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  box-shadow: var(--yk-shadow-sm);
+}
+
+.yk-feedback-state strong {
+  color: var(--yk-text);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.yk-feedback-state p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--yk-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.yk-feedback-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--yk-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.yk-feedback-error {
+  border-color: rgba(225, 29, 72, 0.2);
+  background: linear-gradient(180deg, var(--yk-surface), var(--yk-danger-soft));
+}
+
+.yk-feedback-error .yk-feedback-icon {
+  background: var(--yk-danger-soft);
+  color: var(--yk-danger);
+}
+
+.yk-feedback-empty-result {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: linear-gradient(180deg, var(--yk-surface), var(--yk-safe-soft));
+}
+
+.yk-feedback-empty-result .yk-feedback-icon {
+  background: var(--yk-safe-soft);
+  color: var(--yk-safe-dark);
+}
+
+.yk-inline-alert {
+  border-radius: var(--yk-radius);
+  border: 1px solid currentColor;
+  padding: 12px 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.45;
+}
+
+.yk-inline-alert svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.yk-inline-alert strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.yk-inline-alert p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .yk-loading span {
   width: 30px;
   height: 30px;

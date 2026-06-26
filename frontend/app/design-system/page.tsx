@@ -12,11 +12,14 @@ import {
   YkDataSourceBadge,
   YkDrugSearchResultItem,
   YkEmptyState,
+  YkErrorState,
   YkEvidenceTable,
   YkFormField,
   YkHistoryCard,
+  YkInlineAlert,
   YkLoadingState,
   YkMedicationEntryCard,
+  YkNoResultState,
   YkNoticeBox,
   YkPatientCard,
   YkReportHeaderBanner,
@@ -133,6 +136,18 @@ export default function DesignSystemPage() {
                 description="복용자를 추가한 뒤 약 정보 입력 화면에서 식약처 DB 검색 결과를 선택해주세요."
                 action={<YkButton>복용자 추가</YkButton>}
               />
+              <YkErrorState
+                title="서버 연결에 실패했습니다"
+                description="백엔드 서버가 응답하지 않습니다. 잠시 뒤 다시 시도하거나 Cloud SQL 프록시와 API 서버 상태를 확인해주세요."
+                action={<YkButton variant="secondary">다시 시도</YkButton>}
+              />
+              <YkNoResultState
+                title="리포트 결과 주의사항 없음"
+                description="현재 분석 기준에서는 위험 또는 주의 알림이 확인되지 않았습니다. 복용 약이 변경되면 다시 분석해주세요."
+              />
+              <YkInlineAlert title="최소 입력이 필요합니다" tone="caution">
+                분석을 시작하려면 복용자 정보와 식약처 DB에서 선택한 약물 1개 이상이 필요합니다.
+              </YkInlineAlert>
               <YkLoadingState />
             </div>
           </YkCard>
