@@ -1,0 +1,99 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: promisebox-yakson
+  PROJECT_NUMBER: "331844024784"
+  REGION: asia-northeast3
+  ARTIFACT_REGISTRY_REPOSITORY: yakson
+  BACKEND_SERVICE: yakson-api
+  FRONTEND_SERVICE: yakson-web
+  RUNTIME_SERVICE_ACCOUNT: yakson-runner@promisebox-yakson.iam.gserviceaccount.com
+  DEPLOYER_SERVICE_ACCOUNT: yakson-deployer@promisebox-yakson.iam.gserviceaccount.com
+  WORKLOAD_IDENTITY_PROVIDER: projects/331844024784/locations/global/workloadIdentityPools/github-actions/providers/yakson-ai
+  CLOUDSQL_CONNECTION_NAME: promisebox-yakson:asia-northeast3:yakson-postgres
+  BACKEND_URL: https://yakson-api-7p2ban445a-du.a.run.app
+  FRONTEND_URL: https://yakson-web-7p2ban445a-du.a.run.app
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push backend image
+        env:
+          BACKEND_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.BACKEND_SERVICE }}:${{ github.sha }}
+        run: |
+          docker build -t "${BACKEND_IMAGE}" ./backend
+          docker push "${BACKEND_IMAGE}"
+
+      - name: Deploy backend
+        env:
+          BACKEND_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.BACKEND_SERVICE }}:${{ github.sha }}
+        run: |
+          gcloud run deploy "${BACKEND_SERVICE}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --image "${BACKEND_IMAGE}" \
+            --platform managed \
+            --port 8080 \
+            --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --add-cloudsql-instances "${CLOUDSQL_CONNECTION_NAME}" \
+            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL}" \
+            --set-secrets "DATABASE_URL=yakson-database-url:latest,BACKEND_SHARED_SECRET=yakson-backend-shared-secret:latest" \
+            --allow-unauthenticated \
+            --quiet
+
+      - name: Build and push frontend image
+        env:
+          FRONTEND_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}
+        run: |
+          docker build -t "${FRONTEND_IMAGE}" ./frontend
+          docker push "${FRONTEND_IMAGE}"
+
+      - name: Deploy frontend
+        env:
+          FRONTEND_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.FRONTEND_SERVICE }}:${{ github.sha }}
+        run: |
+          gcloud run deploy "${FRONTEND_SERVICE}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --image "${FRONTEND_IMAGE}" \
+            --platform managed \
+            --port 8080 \
+            --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --set-env-vars "BACKEND_API_BASE_URL=${BACKEND_URL}" \
+            --set-secrets "BACKEND_SHARED_SECRET=yakson-backend-shared-secret:latest" \
+            --allow-unauthenticated \
+            --quiet
+
+      - name: Verify backend health
+        run: curl --fail --show-error --silent "${BACKEND_URL}/health"
+
+      - name: Verify frontend DB proxy health
+        run: curl --fail --show-error --silent "${FRONTEND_URL}/api/db/health"
