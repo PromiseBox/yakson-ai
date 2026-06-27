@@ -12,6 +12,7 @@ from app.database import DATABASE_AUTO_CREATE, SessionLocal, database_info, get_
 from app.routers.analysis import router as analysis_router
 from app.routers.crud import router as crud_router
 from app.routers.crud import seed_default_categories
+from app.routers.ocr import router as ocr_router
 
 
 def _cors_origins() -> list[str]:
@@ -53,6 +54,7 @@ async def require_backend_shared_secret(request: Request, call_next):
 
 app.include_router(crud_router)
 app.include_router(analysis_router)
+app.include_router(ocr_router)
 
 
 @app.exception_handler(OperationalError)

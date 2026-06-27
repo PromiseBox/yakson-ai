@@ -179,22 +179,37 @@ def _template_caregiver_summary(patient, alerts, risk_count: int, caution_count:
     alias = _patient_name(patient)
     total = risk_count + caution_count
     if total == 0:
-        text = (f"{alias} 복용 약을 점검한 결과, 지금 등재된 위험·주의는 발견되지 않았습니다. "
-                f"새로운 증상이 있으면 약사·의사와 상의하세요.")
-    else:
-        text = f"{alias} 복용 약을 점검한 결과, 확인이 필요한 항목 {total}건이 발견됐어요."
-        if risk_count:
-            text += f" 이 중 {risk_count}건은 지금 약사·의사 확인이 필요합니다."
-        # 가치포인트: 노인주의(낙상) 맥락 한 마디 — alerts의 사실에 기반(새 주장 아님).
-        pim_alert = next(
-            (a for a in alerts
-             if _rule_type_value(a) == "ELDERLY_CAUTION" and getattr(a, "related_medications", None)),
-            None,
+        return (
+            f"{alias}님의 복용 약에서는 현재 등재된 위험·주의 알림이 확인되지 않았습니다. "
+            f"별도 알림 없는 약은 {normal_count}개입니다. 새 약이 추가되거나 증상이 달라지면 "
+            "현재 약 목록을 약사·의사에게 보여주고 다시 확인하세요."
         )
-        if pim_alert:
-            text += f" 특히 {pim_alert.related_medications[0]} 등은 어르신에게 낙상·인지 주의가 필요합니다."
-        text += " 처방·복용 변경은 직접 판단하지 말고 약사·의사와 상의하세요."
-    return text
+
+    priority_alert_groups = _priority_alert_groups(alerts, limit=3)
+    parts = [
+        f"{alias}님의 복용 약에서 위험 {risk_count}건, 주의 {caution_count}건이 확인되었습니다.",
+    ]
+    if normal_count:
+        parts.append(f"별도 알림이 없는 약은 {normal_count}개입니다.")
+
+    if priority_alert_groups:
+        alert_summaries = [_caregiver_alert_summary(alert, count=count) for alert, count in priority_alert_groups]
+        covered_count = sum(count for _, count in priority_alert_groups)
+        remaining = max(0, total - covered_count)
+        focus_text = " ".join(summary for summary in alert_summaries if summary)
+        if remaining:
+            focus_text += f" 그 외 확인 항목 {remaining}건은 알림 목록에서 함께 확인해주세요."
+        parts.append(focus_text)
+
+    pim_alert = next(
+        (a for a in alerts if _rule_type_value(a) == "ELDERLY_CAUTION" and getattr(a, "related_medications", None)),
+        None,
+    )
+    if pim_alert:
+        parts.append("고령자 주의 약은 졸림, 어지럼, 비틀거림, 혼동, 낙상 여부를 관찰해 상담 때 전달하세요.")
+
+    parts.append("복용을 임의로 중단하거나 조절하지 말고, 현재 약 목록과 이 결과를 약사·의사에게 보여주고 상담하세요.")
+    return " ".join(part for part in parts if part).strip()
 
 
 def _template_caregiver_detail(
@@ -342,6 +357,104 @@ def _evidence_summary(alert) -> str:
     return " / ".join(summaries)
 
 
+def _priority_alerts(alerts, limit: int) -> list[Any]:
+    return [alert for alert, _count in _priority_alert_groups(alerts, limit)]
+
+
+def _priority_alert_groups(alerts, limit: int) -> list[tuple[Any, int]]:
+    sorted_alerts = sorted(
+        list(alerts),
+        key=lambda alert: (
+            0 if _severity_value(alert) == "RISK" else 1,
+            _rule_priority(_rule_type_value(alert)),
+            str(getattr(alert, "title", "")),
+        ),
+    )
+    groups: list[tuple[Any, int]] = []
+    key_index: dict[tuple[str, str, tuple[str, ...]], int] = {}
+    for alert in sorted_alerts:
+        key = _alert_group_key(alert)
+        if key in key_index:
+            index = key_index[key]
+            representative, count = groups[index]
+            groups[index] = (representative, count + 1)
+            continue
+        if len(groups) >= limit:
+            continue
+        key_index[key] = len(groups)
+        groups.append((alert, 1))
+    return groups
+
+
+def _alert_group_key(alert) -> tuple[str, str, tuple[str, ...]]:
+    related_key = tuple(
+        sorted(
+            _normalize_summary_text(name)
+            for name in (getattr(alert, "related_medications", []) or [])
+            if str(name).strip()
+        )
+    )
+    return (_severity_value(alert), _rule_type_value(alert), related_key)
+
+
+def _rule_priority(rule_type: str) -> int:
+    priorities = {
+        "PRODUCT_INTERACTION": 0,
+        "INGREDIENT_INTERACTION": 0,
+        "DUPLICATE_INGREDIENT": 1,
+        "DUPLICATE_EFFICACY": 2,
+        "DOSAGE_CAUTION": 3,
+        "DURATION_CAUTION": 4,
+        "ELDERLY_CAUTION": 5,
+    }
+    return priorities.get(rule_type, 9)
+
+
+def _caregiver_alert_summary(alert, *, count: int = 1) -> str:
+    related = _compact_related_medications(getattr(alert, "related_medications", []) or [])
+    severity_label = "위험" if _severity_value(alert) == "RISK" else "주의"
+    rule_type = _rule_type_value(alert)
+    if rule_type in {"PRODUCT_INTERACTION", "INGREDIENT_INTERACTION"}:
+        basis_text = f" 관련 근거 {count}건으로 확인되었습니다." if count > 1 else " 확인되었습니다."
+        return f"{severity_label} 항목은 {related} 조합으로{basis_text} 같은 기간 복용 가능 여부를 먼저 확인하세요."
+    if rule_type in {"DUPLICATE_INGREDIENT", "DUPLICATE_EFFICACY"}:
+        return f"{related}는 중복 가능성이 있어 함께 복용해야 하는 처방인지 확인이 필요합니다."
+    if rule_type in {"DOSAGE_CAUTION", "DURATION_CAUTION"}:
+        return f"{related}는 입력된 용량이나 복용 기간이 기준과 맞는지 확인해야 합니다."
+    if rule_type == "ELDERLY_CAUTION":
+        return f"{related}는 고령자 주의 항목입니다."
+    return f"{related}에 대해 {severity_label} 알림이 있습니다."
+
+
+def _pharmacist_alert_summary(alert, *, count: int = 1) -> str:
+    related = _compact_related_medications(getattr(alert, "related_medications", []) or [], limit=2)
+    title = str(getattr(alert, "title", "") or _rule_type_value(alert)).strip()
+    message = _truncate_text(str(getattr(alert, "message", "") or ""), limit=70)
+    count_text = f" x{count}" if count > 1 else ""
+    return f"{_severity_value(alert)}{count_text}/{_rule_type_value(alert)} {title}({related}) {message}".strip()
+
+
+def _compact_related_medications(medications: list[str], *, limit: int = 2) -> str:
+    cleaned = [str(name).strip() for name in medications if str(name).strip()]
+    if not cleaned:
+        return "관련 약물"
+    shown = cleaned[:limit]
+    extra = len(cleaned) - len(shown)
+    text = ", ".join(shown)
+    return f"{text} 외 {extra}개" if extra > 0 else text
+
+
+def _truncate_text(value: str, *, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}..."
+
+
+def _normalize_summary_text(value: str) -> str:
+    return " ".join(str(value).split()).lower()
+
+
 def _template_pharmacist_summary(
     patient,
     alerts,
@@ -355,14 +468,18 @@ def _template_pharmacist_summary(
     age = getattr(patient, "age_years", None)
     age_text = f"{age}세" if age is not None else "나이 미입력"
     source_text = "Graph DB" if analysis_source == "GRAPH" else "룰 기반"
-    alert_lines = [_alert_fact(alert) for alert in alerts[:5]]
+    alert_groups = _priority_alert_groups(alerts, limit=3)
+    alert_lines = [_pharmacist_alert_summary(alert, count=count) for alert, count in alert_groups]
     alert_text = " / ".join(line for line in alert_lines if line)
     if not alert_text:
         alert_text = "위험·주의 알림 없음"
+    covered_count = sum(count for _, count in alert_groups)
+    remaining = max(0, len(alerts) - covered_count)
+    remaining_text = f" / 그 외 {remaining}건" if remaining else ""
     suffix = "" if alert_text.endswith((".", "!", "?")) else "."
     return (
-        f"{alias} / {age_text} / {source_text} 분석 기준 위험 {risk_count}건, "
-        f"주의 {caution_count}건, 정상 {normal_count}건. 주요 확인 항목: {alert_text}{suffix}"
+        f"{alias} / {age_text} / {source_text}: RISK {risk_count}, CAUTION {caution_count}, "
+        f"NORMAL {normal_count}. 확인 우선: {alert_text}{remaining_text}{suffix}"
     )
 
 
@@ -453,6 +570,9 @@ def _polish_with_openai(
                     "너는 약물 안전 리포트 문장 편집자다. 입력된 사실만 사용해 한국어 JSON을 반환한다. "
                     "새 약물명, 새 위험, 새 수치, 진단, 처방 변경 지시를 추가하지 않는다. "
                     "복용 중단·감량·대체 처방을 지시하지 말고 약사·의사 상담으로 안내한다. "
+                    "caregiverSummaryText는 500자 이내 압축 요약으로 작성하고, 위험·주의 개수, "
+                    "우선 확인 항목 최대 3개, 보호자 행동만 포함한다. "
+                    "pharmacistSummaryText는 450자 이내 전문 메모로 작성한다. "
                     "반환 키는 caregiverSummaryText, pharmacistSummaryText, caregiverDetailText, "
                     "pharmacistDetailText, recommendedQuestions, alertExplanations만 사용한다. "
                     "alertExplanations는 입력된 alertId 개수와 값을 그대로 유지하고 설명 문장만 다듬는다."

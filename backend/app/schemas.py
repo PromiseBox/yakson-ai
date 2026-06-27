@@ -114,3 +114,23 @@ class MedicationOut(ApiModel):
 
 class MedicationListOut(ApiModel):
     items: list[MedicationOut]
+
+
+class MedicationOcrCandidate(ApiModel):
+    candidate_id: str = Field(alias="candidateId")
+    entered_drug_name: str = Field(alias="enteredDrugName")
+    category_name: str | None = Field(default=None, alias="categoryName")
+    duration_days: int | None = Field(default=None, alias="durationDays")
+    doses_per_day: float | None = Field(default=None, alias="dosesPerDay")
+    dose_amount: float | None = Field(default=None, alias="doseAmount")
+    dose_unit: str | None = Field(default=None, alias="doseUnit")
+    source_line: str = Field(alias="sourceLine")
+    confidence: float
+    needs_review: bool = Field(alias="needsReview")
+
+
+class MedicationOcrResponse(ApiModel):
+    provider: str
+    raw_text: str = Field(alias="rawText")
+    candidates: list[MedicationOcrCandidate]
+    warnings: list[str] = Field(default_factory=list)
