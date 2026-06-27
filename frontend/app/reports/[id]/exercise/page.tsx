@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
 import { buildExerciseGuides } from "@/lib/app-store";
 import { getPatientById, listPatientMedications } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import { ExerciseGuide, MedicationRecord, PatientRecord } from "@/lib/types";
 
 export default function ExerciseReportPage() {
@@ -31,7 +32,7 @@ export default function ExerciseReportPage() {
       } catch (caught) {
         setPatient(null);
         setMedications([]);
-        setError(caught instanceof Error ? caught.message : "운동 리포트를 불러오지 못했습니다.");
+        setError(toUserErrorMessage(caught, "운동 리포트를 불러오지 못했습니다."));
       } finally {
         setIsLoading(false);
       }

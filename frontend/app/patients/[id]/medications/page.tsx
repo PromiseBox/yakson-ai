@@ -1,10 +1,23 @@
 "use client";
 
+import { Database, FileText, Pencil, Pill, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
+import {
+  YkButton,
+  YkCard,
+  YkDrugSearchResultItem,
+  YkErrorState,
+  YkIconButton,
+  YkInlineAlert,
+  YkNoResultState,
+  YkNoticeBox,
+  YkSectionHeader,
+  YkStatusPill
+} from "@/components/ui/design-system";
 import {
   groupMedicationsByCategory,
   mergePrescriptionCategories,
@@ -21,6 +34,7 @@ import {
   updateMedicationOnServer,
   validateDrug
 } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import { DrugSearchItem, MedicationRecord, PatientRecord, PrescriptionCategory } from "@/lib/types";
 
 const DEFAULT_CATEGORY = "내과";
@@ -100,7 +114,7 @@ export default function MedicationInputPage() {
       } catch (caught) {
         if (!ignore) {
           setSearchResults([]);
-          setSearchError(caught instanceof Error ? caught.message : "약명 검색 서버에 연결하지 못했습니다.");
+          setSearchError(toUserErrorMessage(caught, "약품 데이터베이스 조회 중 문제가 발생했습니다."));
         }
       } finally {
         if (!ignore) {
@@ -152,7 +166,7 @@ export default function MedicationInputPage() {
     } catch (caught) {
       setPatient(null);
       setMedications([]);
-      setPageError(caught instanceof Error ? caught.message : "복용자 또는 약물 목록을 불러오지 못했습니다.");
+      setPageError(toUserErrorMessage(caught, "약 정보 화면을 불러오지 못했습니다."));
     } finally {
       setIsLoading(false);
     }
@@ -257,7 +271,7 @@ export default function MedicationInputPage() {
       setNotice(`${nextCategoryName} 항목에 약 정보를 저장했습니다.`);
       await refreshPage();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "선택한 약물을 DB에 저장하지 못했습니다.");
+      setError(toUserErrorMessage(caught, "선택한 약 정보를 저장하지 못했습니다."));
     } finally {
       setIsAdding(false);
     }
@@ -271,7 +285,7 @@ export default function MedicationInputPage() {
       setNotice("약 정보를 삭제했습니다.");
       await refreshPage();
     } catch (caught) {
-      setPageError(caught instanceof Error ? caught.message : "약물 정보를 삭제하지 못했습니다.");
+      setPageError(toUserErrorMessage(caught, "약물 정보를 삭제하지 못했습니다."));
     }
   }
 
@@ -342,7 +356,7 @@ export default function MedicationInputPage() {
       setNotice("약 정보를 수정했습니다.");
       await refreshPage();
     } catch (caught) {
-      setEditError(caught instanceof Error ? caught.message : "약물 정보를 수정하지 못했습니다.");
+      setEditError(toUserErrorMessage(caught, "약물 정보를 수정하지 못했습니다."));
     } finally {
       setIsEditing(false);
     }
@@ -353,14 +367,18 @@ export default function MedicationInputPage() {
       title="약 정보 입력"
       subtitle="입력 - 상세 약 정보"
       action={
-        <Link className="button secondary" href="/patients">
+        <Link className="yk-button yk-button-secondary" href="/patients">
           복용자 목록
         </Link>
       }
     >
       {isLoading && <LoadingState />}
-      {pageError && <p className="error">{pageError}</p>}
-      {notice && <p className="success">{notice}</p>}
+      {pageError && <YkErrorState title="복용자 또는 약물 목록을 불러오지 못했습니다" description={pageError} />}
+      {notice && (
+        <YkInlineAlert title="저장 완료" tone="safe">
+          {notice}
+        </YkInlineAlert>
+      )}
 
       {!isLoading && !patient && (
         <EmptyState
@@ -376,26 +394,24 @@ export default function MedicationInputPage() {
 
       {!isLoading && patient && (
         <div className="twoColumn">
-          <section className="panel">
-            <div className="sectionHeader">
-              <div>
-                <h2>{patient.displayName}</h2>
-                <p className="subtext">
-                  {patient.ageYears}세 · {sexLabel(patient.sex)} · 분석 목록 {medications.length}개
-                </p>
-              </div>
-              <Link className="button small secondary" href={`/reports/${patient.id}`}>
-                리포트 보기
-              </Link>
-            </div>
+          <YkCard>
+            <YkSectionHeader
+              title={patient.displayName}
+              subtitle={`${patient.ageYears}세 · ${sexLabel(patient.sex)} · 분석 목록 ${medications.length}개`}
+              icon={Pill}
+              action={
+                <Link className="yk-button yk-button-secondary yk-button-compact" href={`/reports/${patient.id}`}>
+                  <FileText size={15} />
+                  리포트 보기
+                </Link>
+              }
+            />
 
-            <div className="guidance">
-              <strong>등록 원칙</strong>
-              <br />
-              약명 입력은 검색용입니다. 서비스는 식약처 DB 자동완성 결과에서 선택한 약물만 지원합니다.
-            </div>
+            <YkNoticeBox title="등록 원칙" tone="brand" icon={Database}>
+              약품은 식약처 기반 데이터베이스에서 확인된 품목을 검색해 선택할 수 있습니다.
+            </YkNoticeBox>
 
-            <form className="stack" onSubmit={submitMedication}>
+            <form className="stack yk-product-form" onSubmit={submitMedication}>
               <CategorySelector
                 categories={categoryOptions}
                 selectedCategory={category}
@@ -487,33 +503,38 @@ export default function MedicationInputPage() {
                 </label>
               </div>
 
-              {error && <p className="error">{error}</p>}
+              {error && (
+                <YkInlineAlert title="최소 입력이 필요합니다" tone="caution">
+                  {error}
+                </YkInlineAlert>
+              )}
 
-              <button
-                className="button primary"
+              <YkButton
+                icon={Plus}
                 type="submit"
                 disabled={isAdding || !selectedDrug || (category === CUSTOM_CATEGORY && !customCategory.trim())}
               >
                 {isAdding ? "저장 중" : "약 정보 저장"}
-              </button>
+              </YkButton>
             </form>
-          </section>
+          </YkCard>
 
-          <section className="panel">
-            <div className="sectionHeader">
-              <div>
-                <h2>분석 목록</h2>
-                <p className="subtext">Cloud SQL DB에 저장된 약물 목록입니다.</p>
-              </div>
-              {medications.length > 0 && (
-                <Link className="button small primary" href={`/reports/${patient.id}`}>
-                  분석하기
-                </Link>
-              )}
-            </div>
+          <YkCard>
+              <YkSectionHeader
+              title="분석 목록"
+              subtitle="선택한 약품을 기준으로 분석 대상 목록을 구성합니다."
+              icon={Database}
+              action={
+                medications.length > 0 && (
+                  <Link className="yk-button yk-button-primary yk-button-compact" href={`/reports/${patient.id}`}>
+                    분석하기
+                  </Link>
+                )
+              }
+            />
 
             {medications.length === 0 ? (
-              <EmptyState
+              <YkNoResultState
                 title="분석 목록이 비어 있습니다"
                 description="왼쪽 입력 영역에서 약명을 검색하고 자동완성 결과를 선택해주세요."
               />
@@ -523,11 +544,18 @@ export default function MedicationInputPage() {
                   <article className="categoryCard" key={group.category}>
                     <div className="sectionHeader">
                       <h3>{group.category}</h3>
+                      <YkStatusPill tone="brand" count={group.medications.length}>
+                        등록
+                      </YkStatusPill>
                       <div className="rowActions">
-                        <span className="pill normal">{group.medications.length}개</span>
-                        <button className="button small secondary" type="button" onClick={() => selectCategory(group.category)}>
+                        <YkButton
+                          className="yk-button-compact"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => selectCategory(group.category)}
+                        >
                           입력
-                        </button>
+                        </YkButton>
                       </div>
                     </div>
                     <div className="drugList">
@@ -544,10 +572,9 @@ export default function MedicationInputPage() {
                 ))}
               </div>
             )}
-          </section>
+          </YkCard>
         </div>
       )}
-
       {editTarget && (
         <div className="modalBackdrop" role="dialog" aria-modal="true">
           <form className="sheet" onSubmit={submitMedicationEdit}>
@@ -708,52 +735,50 @@ function DrugAutocomplete({
             <p className="subtext">성분 {selectedDrug.ingredientNames.slice(0, 3).join(", ")}</p>
           )}
         </div>
-        <span className="pill normal">선택 완료</span>
+        <YkStatusPill tone="safe">선택 완료</YkStatusPill>
       </div>
     );
   }
 
   if (trimmed.length < 2) {
-    return <p className="subtext">두 글자 이상 입력하면 Cloud SQL의 식약처 약물 DB에서 검색합니다.</p>;
+    return (
+      <YkInlineAlert title="최소 입력이 필요합니다" tone="caution">
+        두 글자 이상 입력하면 식약처 기반 약품 데이터베이스에서 검색합니다.
+      </YkInlineAlert>
+    );
   }
 
   if (isSearching) {
-    return <p className="subtext">식약처 DB에서 약명을 검색하고 있습니다.</p>;
+    return (
+      <YkInlineAlert title="검색 중" tone="brand">
+        식약처 DB에서 약명을 검색하고 있습니다.
+      </YkInlineAlert>
+    );
   }
 
   if (searchError) {
-    return <p className="error">{searchError}</p>;
+    return <YkErrorState title="약명 검색 서버에 연결하지 못했습니다" description={searchError} />;
   }
 
   if (results.length === 0) {
     return (
-      <div className="guidance">
-        <strong>서비스 대상 아님</strong>
-        <br />
-        식약처 기반 DB에서 일치하는 약물을 찾지 못했습니다. 공식 제품명, 성분명, 다른 표기명으로 다시 검색해주세요.
-      </div>
+      <YkNoResultState
+        title="서비스 대상 아님"
+        description="식약처 기반 DB에서 일치하는 약물을 찾지 못했습니다. 공식 제품명, 성분명, 다른 표기명으로 다시 검색해주세요."
+      />
     );
   }
 
   return (
     <div className="autocompleteList" aria-label="식약처 DB 약물 자동완성 결과">
       {results.map((drug) => (
-        <button
-          className="autocompleteItem"
+        <YkDrugSearchResultItem
           key={`${drug.productCode}-${drug.itemSeq}-${drug.productName}`}
-          type="button"
           onClick={() => onSelect(drug)}
-        >
-          <span>
-            <strong>{drug.productName}</strong>
-            <small>
-              {drug.companyName || "업체명 없음"} · 제품코드 {drug.productCode || "-"} · 품목코드{" "}
-              {drug.itemSeq || "-"}
-            </small>
-            {drug.ingredientNames.length > 0 && <small>성분 {drug.ingredientNames.slice(0, 3).join(", ")}</small>}
-          </span>
-          <span className="pill normal">선택</span>
-        </button>
+          productName={drug.productName}
+          companyName={`${drug.companyName || "업체명 없음"} · 품목코드 ${drug.itemSeq || "-"}`}
+          code={drug.productCode || "-"}
+        />
       ))}
     </div>
   );
@@ -785,12 +810,10 @@ function MedicationRow({
         </div>
       </div>
       <div className="rowActions">
-        <button className="button small secondary" type="button" onClick={onEdit}>
+        <YkButton className="yk-button-compact" icon={Pencil} variant="secondary" type="button" onClick={onEdit}>
           수정
-        </button>
-        <button className="removeButton" type="button" onClick={onDelete} aria-label="약물 삭제">
-          x
-        </button>
+        </YkButton>
+        <YkIconButton icon={Trash2} label="약물 삭제" tone="danger" onClick={onDelete} />
       </div>
     </div>
   );

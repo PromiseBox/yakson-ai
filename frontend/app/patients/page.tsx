@@ -1,9 +1,18 @@
 "use client";
 
+import { AlertCircle, Database, Pencil, Plus, Trash2, User } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
+import {
+  YkButton,
+  YkCard,
+  YkErrorState,
+  YkInlineAlert,
+  YkNoticeBox,
+  YkStatusPill
+} from "@/components/ui/design-system";
 import { sexLabel } from "@/lib/app-store";
 import {
   createPatientOnServer,
@@ -13,6 +22,7 @@ import {
   listPatients,
   updatePatientOnServer
 } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import { PatientRecord, Sex } from "@/lib/types";
 
 type SheetMode = "add" | "edit" | null;
@@ -68,7 +78,7 @@ export default function PatientsPage() {
       setMedicationCounts(Object.fromEntries(rows.map((row) => [row.id, row.medicationCount])));
       setLatestAnalysisDates(Object.fromEntries(rows.map((row) => [row.id, row.latestAnalysisAt])));
     } catch (caught) {
-      setPageError(caught instanceof Error ? caught.message : "복용자 목록을 불러오지 못했습니다.");
+      setPageError(toUserErrorMessage(caught, "복용자 목록을 불러오지 못했습니다."));
     } finally {
       setIsLoading(false);
     }
@@ -131,7 +141,7 @@ export default function PatientsPage() {
       setSelectedPatient(null);
       await refreshPatients();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "복용자 정보를 저장하지 못했습니다.");
+      setError(toUserErrorMessage(caught, "복용자 정보를 저장하지 못했습니다."));
     } finally {
       setIsSaving(false);
     }
@@ -151,30 +161,32 @@ export default function PatientsPage() {
       setDeleteTarget(null);
       await refreshPatients();
     } catch (caught) {
-      setPageError(caught instanceof Error ? caught.message : "복용자를 삭제하지 못했습니다.");
+      setPageError(toUserErrorMessage(caught, "복용자를 삭제하지 못했습니다."));
     } finally {
       setIsSaving(false);
     }
   }
 
   const action = (
-    <button className="button primary" type="button" onClick={openAddSheet}>
+    <YkButton icon={Plus} type="button" onClick={openAddSheet}>
       복용자 추가
-    </button>
+    </YkButton>
   );
 
   return (
     <AppShell title="복용자 관리" subtitle="입력 - DB 저장 목록" action={action}>
       {isLoading && <LoadingState />}
-      {pageError && <p className="error">{pageError}</p>}
-      {notice && <p className="success">{notice}</p>}
+      {pageError && <YkErrorState title="복용자 목록을 불러오지 못했습니다" description={pageError} />}
+      {notice && (
+        <YkInlineAlert title="저장 완료" tone="safe">
+          {notice}
+        </YkInlineAlert>
+      )}
 
       {!isLoading && (
-        <div className="guidance" style={{ marginBottom: 16 }}>
-          <strong>현재 저장 방식</strong>
-          <br />
-          복용자와 약물 목록은 Cloud SQL DB에 저장됩니다. 약물은 식약처 DB 자동완성에서 선택된 항목만 저장할 수 있습니다.
-        </div>
+        <YkNoticeBox title="약품 데이터베이스 안내" tone="brand" icon={Database}>
+          약품은 식약처 기반 데이터베이스에서 확인된 품목을 검색해 선택할 수 있습니다.
+        </YkNoticeBox>
       )}
 
       {!isLoading && patients.length === 0 && (
@@ -182,9 +194,9 @@ export default function PatientsPage() {
           title="등록된 복용자가 없습니다"
           description="복용자를 추가한 뒤 약 정보 입력 화면에서 식약처 DB 검색 결과를 선택해주세요."
           action={
-            <button className="button primary" type="button" onClick={openAddSheet}>
+            <YkButton icon={Plus} type="button" onClick={openAddSheet}>
               복용자 추가
-            </button>
+            </YkButton>
           }
         />
       )}
@@ -334,43 +346,43 @@ function PatientCard({
   const canAnalyze = medicationCount > 0;
 
   return (
-    <article className="patientCard">
-      <div className="patientCardTop">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="avatar">{patient.displayName.slice(0, 1)}</span>
+    <YkCard className="yk-product-patient-card">
+      <div className="yk-card-head-row">
+        <div className="yk-avatar-row">
+          <span className="yk-avatar">
+            <User size={18} />
+          </span>
           <div>
-            <h3>{patient.displayName}</h3>
-            <div className="meta">
+            <strong>{patient.displayName}</strong>
+            <div className="yk-product-meta">
               <span>{patient.ageYears}세</span>
               <span>{sexLabel(patient.sex)}</span>
               <span>분석 목록 {medicationCount}개</span>
             </div>
           </div>
         </div>
-        <span className={`pill ${canAnalyze ? "normal" : "caution"}`}>
-          {canAnalyze ? "분석 가능" : "약물 선택 필요"}
-        </span>
+        <YkStatusPill tone={canAnalyze ? "safe" : "caution"}>{canAnalyze ? "분석 가능" : "약물 선택 필요"}</YkStatusPill>
       </div>
 
-      <div className="meta">
+      <div className="yk-product-meta">
         <span>최근 수정 {new Date(patient.updatedAt).toLocaleDateString("ko-KR")}</span>
         <span>마지막 분석 {formatDateTime(latestAnalysisAt)}</span>
       </div>
 
-      <div className="patientCardTop">
-        <div className="segmented">
-          <button className="button small secondary" type="button" onClick={onEdit}>
+      <div className="yk-card-meta">
+        <div className="yk-component-row">
+          <YkButton className="yk-button-compact" icon={Pencil} variant="secondary" type="button" onClick={onEdit}>
             수정
-          </button>
-          <button className="button small danger" type="button" onClick={onDelete}>
+          </YkButton>
+          <YkButton className="yk-button-compact" icon={Trash2} variant="danger" type="button" onClick={onDelete}>
             삭제
-          </button>
+          </YkButton>
         </div>
-        <Link className="button small primary" href={`/patients/${patient.id}/medications`}>
+        <Link className="yk-button yk-button-primary yk-button-compact" href={`/patients/${patient.id}/medications`}>
           약 입력
         </Link>
       </div>
-    </article>
+    </YkCard>
   );
 }
 

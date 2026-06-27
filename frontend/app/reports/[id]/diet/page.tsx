@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
 import { buildDietGuides } from "@/lib/app-store";
 import { getPatientById, listPatientMedications } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import { DietGuide, MedicationRecord, PatientRecord } from "@/lib/types";
 
 export default function DietReportPage() {
@@ -31,7 +32,7 @@ export default function DietReportPage() {
       } catch (caught) {
         setPatient(null);
         setMedications([]);
-        setError(caught instanceof Error ? caught.message : "식습관 리포트를 불러오지 못했습니다.");
+        setError(toUserErrorMessage(caught, "식습관 리포트를 불러오지 못했습니다."));
       } finally {
         setIsLoading(false);
       }

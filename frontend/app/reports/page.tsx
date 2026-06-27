@@ -1,11 +1,14 @@
 "use client";
 
+import { FileText, Pill, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
+import { YkCard, YkErrorState, YkStatusPill } from "@/components/ui/design-system";
 import { sexLabel } from "@/lib/app-store";
 import { fetchAnalysisHistory, listPatientMedications, listPatients } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import { PatientRecord } from "@/lib/types";
 
 type PatientRow = {
@@ -36,7 +39,7 @@ export default function ReportsPage() {
         );
         setRows(nextRows);
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : "분석 조회 목록을 불러오지 못했습니다.");
+        setError(toUserErrorMessage(caught, "분석 조회 목록을 불러오지 못했습니다."));
       } finally {
         setIsLoading(false);
       }
@@ -48,7 +51,7 @@ export default function ReportsPage() {
   return (
     <AppShell title="분석 조회" subtitle="조회 - 복용자 선택">
       {isLoading && <LoadingState />}
-      {error && <p className="error">{error}</p>}
+      {error && <YkErrorState title="분석 조회 목록을 불러오지 못했습니다" description={error} />}
 
       {!isLoading && rows.length === 0 && (
         <EmptyState
@@ -63,45 +66,49 @@ export default function ReportsPage() {
       )}
 
       {!isLoading && rows.length > 0 && (
-        <div className="cardGrid">
+        <div className="yk-styleguide-grid">
           {rows.map(({ patient, medicationCount, latestAnalysisAt }) => {
             const canAnalyze = medicationCount > 0;
 
             return (
-              <article className="reportPatientCard" key={patient.id}>
-                <div className="patientCardTop">
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="avatar">{patient.displayName.slice(0, 1)}</span>
+              <YkCard className="yk-product-patient-card" key={patient.id}>
+                <div className="yk-card-head-row">
+                  <div className="yk-avatar-row">
+                    <span className="yk-avatar">
+                      <User size={18} />
+                    </span>
                     <div>
-                      <h3>{patient.displayName}</h3>
-                      <div className="meta">
+                      <strong>{patient.displayName}</strong>
+                      <div className="yk-product-meta">
                         <span>{patient.ageYears}세</span>
                         <span>{sexLabel(patient.sex)}</span>
                         <span>분석 목록 {medicationCount}개</span>
                       </div>
                     </div>
                   </div>
-                  <span className={`pill ${canAnalyze ? "normal" : "caution"}`}>
+                  <YkStatusPill tone={canAnalyze ? "safe" : "caution"}>
                     {canAnalyze ? "분석 가능" : "약물 선택 필요"}
-                  </span>
+                  </YkStatusPill>
                 </div>
 
-                <p className="subtext">
+                <p className="yk-product-card-copy">
                   {canAnalyze
                     ? "DB에 저장된 식약처 등록 약물을 기준으로 룰 기반 분석 미리보기를 실행할 수 있습니다."
                     : "약 정보 입력 화면에서 자동완성 결과를 선택해 분석 목록을 채워주세요."}
                 </p>
-                <p className="subtext">마지막 분석 {formatDateTime(latestAnalysisAt)}</p>
+                <p className="yk-product-card-copy">마지막 분석 {formatDateTime(latestAnalysisAt)}</p>
 
-                <div className="quickLinks">
-                  <Link className="button primary" href={`/reports/${patient.id}`}>
+                <div className="yk-card-meta">
+                  <Link className="yk-button yk-button-primary yk-button-compact" href={`/reports/${patient.id}`}>
+                    <FileText size={15} />
                     분석 화면
                   </Link>
-                  <Link className="button secondary" href={`/patients/${patient.id}/medications`}>
+                  <Link className="yk-button yk-button-secondary yk-button-compact" href={`/patients/${patient.id}/medications`}>
+                    <Pill size={15} />
                     약 정보 입력
                   </Link>
                 </div>
-              </article>
+              </YkCard>
             );
           })}
         </div>

@@ -1,10 +1,22 @@
 "use client";
 
+import { Activity, Copy, Database, Pill } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
+import {
+  YkAlertCard,
+  YkButton,
+  YkCard,
+  YkErrorState,
+  YkInlineAlert,
+  YkNoResultState,
+  YkNoticeBox,
+  YkSectionHeader,
+  YkStatusPill
+} from "@/components/ui/design-system";
 import { buildDietGuides, buildExerciseGuides, groupMedicationsByCategory, sexLabel } from "@/lib/app-store";
 import {
   fetchAnalysisHistory,
@@ -14,6 +26,7 @@ import {
   listPatientMedications,
   runAndSaveLatestAnalysis
 } from "@/lib/api";
+import { toUserErrorMessage } from "@/lib/error-messages";
 import {
   AlertEvidence,
   AnalysisAlert,
@@ -52,6 +65,7 @@ export default function PatientDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [hasCopiedHandoff, setHasCopiedHandoff] = useState(false);
 
   useEffect(() => {
     async function loadPage() {
@@ -73,7 +87,7 @@ export default function PatientDashboardPage() {
         setMedications([]);
         setReport(null);
         setReportHistory([]);
-        setPageError(caught instanceof Error ? caught.message : "분석 데이터를 불러오지 못했습니다.");
+        setPageError(toUserErrorMessage(caught, "분석 데이터를 불러오지 못했습니다."));
       } finally {
         setIsLoading(false);
       }
@@ -133,7 +147,7 @@ export default function PatientDashboardPage() {
       setReportNotice("최신 분석 리포트를 저장했습니다.");
     } catch (caught) {
       setReport(null);
-      setReportError(caught instanceof Error ? caught.message : "분석 리포트를 저장하지 못했습니다.");
+      setReportError(toUserErrorMessage(caught, "분석 리포트를 저장하지 못했습니다."));
     } finally {
       setIsReportLoading(false);
     }
@@ -153,24 +167,39 @@ export default function PatientDashboardPage() {
       setReport(selectedReport);
       setReportNotice(item.isLatest ? "최신 리포트를 불러왔습니다." : "과거 리포트를 불러왔습니다.");
     } catch (caught) {
-      setReportError(caught instanceof Error ? caught.message : "분석 이력을 불러오지 못했습니다.");
+      setReportError(toUserErrorMessage(caught, "분석 이력을 불러오지 못했습니다."));
     } finally {
       setIsHistoryLoading(false);
     }
   }
 
+  async function copyPharmacistHandoff() {
+    if (!report?.pharmacistHandoffText) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(report.pharmacistHandoffText);
+    setHasCopiedHandoff(true);
+    window.setTimeout(() => setHasCopiedHandoff(false), 1800);
+  }
+
+  const summaryText = report ? buildSummaryText(report) : "";
+  const dietWarningCount = dietGuides.filter((guide) => guide.severity !== "safe").length;
+  const exerciseWarningCount = exerciseGuides.filter((guide) => guide.severity !== "safe").length;
+  const hasLifestyleReport = dietWarningCount > 0 || exerciseWarningCount > 0;
+
   return (
     <AppShell
       title="복약 분석 미리보기"
-      subtitle="조회 - 룰 기반 안전 분석"
+      subtitle="조회 - 복약 안전 확인"
       action={
-        <Link className="button secondary" href="/reports">
+        <Link className="yk-button yk-button-secondary" href="/reports">
           조회 목록
         </Link>
       }
     >
       {isLoading && <LoadingState />}
-      {pageError && <p className="error">{pageError}</p>}
+      {pageError && <YkErrorState title="분석 데이터를 불러오지 못했습니다" description={pageError} />}
 
       {!isLoading && !patient && (
         <EmptyState
@@ -199,51 +228,82 @@ export default function PatientDashboardPage() {
       {!isLoading && patient && medications.length > 0 && (
         <div className="dashboardGrid">
           <div className="stack">
-            <section className="panel">
-              <div className="sectionHeader">
-                <div>
-                  <h2>{patient.displayName}</h2>
-                  <p className="subtext">
-                    {patient.ageYears}세 · {sexLabel(patient.sex)} · 분석 목록 {medications.length}개
-                  </p>
-                </div>
-                <Link className="button small secondary" href={`/patients/${patient.id}/medications`}>
+            <YkCard>
+              <YkSectionHeader
+                title={patient.displayName}
+                subtitle={`${patient.ageYears}세 · ${sexLabel(patient.sex)} · 분석 목록 ${medications.length}개`}
+                icon={Activity}
+                action={
+                  <Link className="yk-button yk-button-secondary yk-button-compact" href={`/patients/${patient.id}/medications`}>
+                    <Pill size={15} />
                   약 정보 수정
-                </Link>
-              </div>
+                  </Link>
+                }
+              />
 
-              <div className="previewActions">
+              <div className="yk-analysis-strip">
                 <div>
-                  <strong>DB 저장 약물 기준 분석</strong>
+                  <strong>저장된 약으로 안전 확인</strong>
                   <p className="subtext">
-                    Cloud SQL에 저장된 식약처 등록 약물을 룰 데이터로 조회하고 최신 리포트로 저장합니다.
+                    등록된 약 정보를 바탕으로 함께 복용할 때 주의할 점을 확인하고 최신 리포트로 저장합니다.
                   </p>
                 </div>
-                <button className="button primary" type="button" onClick={runPreview} disabled={isReportLoading}>
+                <YkButton icon={Database} type="button" onClick={runPreview} disabled={isReportLoading}>
                   {isReportLoading ? "분석 중" : report ? "다시 분석하기" : "분석하기"}
-                </button>
+                </YkButton>
               </div>
 
-              {reportNotice && <p className="success">{reportNotice}</p>}
-              {reportError && <p className="error">{reportError}</p>}
+              {reportNotice && (
+                <YkInlineAlert title="리포트 상태" tone="safe">
+                  {reportNotice}
+                </YkInlineAlert>
+              )}
+              {reportError && <YkErrorState title="분석 리포트를 처리하지 못했습니다" description={reportError} />}
               {report && (
                 <p className="subtext" style={{ marginTop: 10 }}>
                   저장일 {formatDateTime(reportTimestamp)}
                 </p>
               )}
               {report && !isViewingLatestReport && (
-                <div className="guidance caution" style={{ marginTop: 12 }}>
-                  <strong>과거 리포트를 보고 있습니다</strong>
-                  <br />
+                <YkNoticeBox title="과거 리포트를 보고 있습니다" tone="caution">
                   현재 화면은 최신 리포트가 아닙니다. 현재 약물 기준으로 확인하려면 다시 분석하기를 눌러주세요.
-                </div>
+                </YkNoticeBox>
               )}
               {report && isReportStale && (
-                <div className="guidance caution" style={{ marginTop: 12 }}>
-                  <strong>다시 분석이 필요합니다</strong>
-                  <br />
+                <YkNoticeBox title="다시 분석이 필요합니다" tone="caution">
                   현재 약물 목록과 이 리포트의 저장 시점 약물 목록이 다릅니다. 최신 결과를 보려면 다시 분석하기를 눌러주세요.
+                </YkNoticeBox>
+              )}
+            </YkCard>
+
+            <section className="panel">
+              <h2>분석 요약</h2>
+              {report ? (
+                <div className="yk-report-summary-stack">
+                  <div className="summaryGrid">
+                    <div className="summaryBox risk">
+                      <div>
+                        <strong>{report.summary.riskCount}</strong>
+                        <span>위험</span>
+                      </div>
+                    </div>
+                    <div className="summaryBox caution">
+                      <div>
+                        <strong>{report.summary.cautionCount}</strong>
+                        <span>주의</span>
+                      </div>
+                    </div>
+                    <div className="summaryBox normal">
+                      <div>
+                        <strong>{report.summary.normalCount}</strong>
+                        <span>정상</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="subtext">{summaryText}</p>
                 </div>
+              ) : (
+                <p className="subtext">분석하기를 누르면 최신 리포트 요약이 저장되고 표시됩니다.</p>
               )}
             </section>
 
@@ -260,7 +320,9 @@ export default function PatientDashboardPage() {
                   <article className="categoryCard" key={group.category}>
                     <div className="sectionHeader">
                       <h3>{group.category}</h3>
-                      <span className="pill normal">{group.medications.length}개</span>
+                      <YkStatusPill tone="brand" count={group.medications.length}>
+                        등록
+                      </YkStatusPill>
                     </div>
                     <div className="drugList">
                       {group.medications.map((medication) => (
@@ -290,9 +352,9 @@ export default function PatientDashboardPage() {
             <section className="panel">
               <div className="sectionHeader">
                 <div>
-                  <h2>룰 기반 알림</h2>
+                  <h2>주의 알림</h2>
                   <p className="subtext">
-                    동일 성분, 동일 효능군, 병용금기/주의, 고령자/임부/수유부/연령/기간/용량 주의 룰을 확인합니다.
+                    함께 복용할 때 확인이 필요한 항목을 위험도별로 보여줍니다.
                   </p>
                 </div>
               </div>
@@ -300,19 +362,16 @@ export default function PatientDashboardPage() {
               {isReportLoading && <LoadingState />}
 
               {!isReportLoading && !report && !reportError && (
-                <div className="guidance">
-                  <strong>분석 대기 중</strong>
-                  <br />
+                <YkInlineAlert title="분석 대기 중" tone="brand">
                   위의 분석하기 버튼을 누르면 현재 DB 저장 목록 기준의 최신 리포트가 저장됩니다.
-                </div>
+                </YkInlineAlert>
               )}
 
               {!isReportLoading && report && report.alerts.length === 0 && (
-                <div className="guidance">
-                  <strong>확인된 경고 없음</strong>
-                  <br />
-                  현재 선택된 약물 조합에서는 적용된 룰 기준 위험/주의 알림이 확인되지 않았습니다.
-                </div>
+                <YkNoResultState
+                  title="확인된 경고 없음"
+                  description="현재 선택된 약물 조합에서는 위험 또는 주의 알림이 확인되지 않았습니다."
+                />
               )}
 
               {!isReportLoading && report && report.alerts.length > 0 && (
@@ -328,8 +387,8 @@ export default function PatientDashboardPage() {
               <section className="panel">
                 <div className="sectionHeader">
                   <div>
-                    <h2>룰별 근거</h2>
-                    <p className="subtext">각 알림이 어떤 DB 룰에서 나왔는지 확인합니다.</p>
+                    <h2>확인 근거</h2>
+                    <p className="subtext">각 알림을 판단할 때 참고한 데이터 출처를 확인합니다.</p>
                   </div>
                 </div>
                 <EvidenceTable rows={evidenceRows} />
@@ -338,77 +397,18 @@ export default function PatientDashboardPage() {
           </div>
 
           <aside className="stack">
-            <section className="panel">
-              <div className="sectionHeader">
-                <div>
-                  <h2>분석 이력</h2>
-                  <p className="subtext">전체 이력을 보관하고 화면은 최신 리포트를 기본으로 보여줍니다.</p>
-                </div>
-              </div>
-
-              {reportHistory.length === 0 ? (
-                <p className="subtext">저장된 분석 이력이 없습니다.</p>
-              ) : (
-                <div className="stack">
-                  {reportHistory.map((item) => (
-                    <div className="historyRow" key={item.patientReportId}>
-                      <div>
-                        <strong>{formatDateTime(item.createdAt)}</strong>
-                        <div className="meta">
-                          <span>위험 {item.riskCount}건</span>
-                          <span>주의 {item.cautionCount}건</span>
-                          <span>약물 {item.medicationCount}개</span>
-                        </div>
-                      </div>
-                      <div className="rowActions">
-                        {item.isLatest && <span className="pill normal">최신</span>}
-                        {item.isStale && <span className="pill caution">재분석 필요</span>}
-                        <button
-                          className="button small secondary"
-                          type="button"
-                          onClick={() => openHistoryReport(item)}
-                          disabled={isHistoryLoading}
-                        >
-                          보기
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="panel">
-              <h2>분석 요약</h2>
-              {report ? (
-                <div className="summaryGrid">
-                  <div className="summaryBox risk">
-                    <div>
-                      <strong>{report.summary.riskCount}</strong>
-                      <span>위험</span>
-                    </div>
-                  </div>
-                  <div className="summaryBox caution">
-                    <div>
-                      <strong>{report.summary.cautionCount}</strong>
-                      <span>주의</span>
-                    </div>
-                  </div>
-                  <div className="summaryBox normal">
-                    <div>
-                      <strong>{report.summary.normalCount}</strong>
-                      <span>정상</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="subtext">분석하기를 누르면 최신 리포트 요약이 저장되고 표시됩니다.</p>
-              )}
-            </section>
-
             {report && (
               <section className="panel">
-                <h2>약사 전달 요약</h2>
+                <div className="sectionHeader">
+                  <div>
+                    <h2>약사 전달 요약</h2>
+                    <p className="subtext">상담 시 보여줄 수 있는 짧은 요약입니다.</p>
+                  </div>
+                  <button className="yk-button yk-button-secondary yk-button-compact" type="button" onClick={copyPharmacistHandoff}>
+                    <Copy size={15} />
+                    {hasCopiedHandoff ? "복사됨" : "복사하기"}
+                  </button>
+                </div>
                 <p className="subtext">{report.pharmacistHandoffText}</p>
               </section>
             )}
@@ -421,55 +421,87 @@ export default function PatientDashboardPage() {
               </section>
             )}
 
+            {hasLifestyleReport && (
             <section className="panel">
               <h2>생활 리포트</h2>
               <div className="quickLinks">
-                <Link className="quickLink" href={`/reports/${patient.id}/diet`}>
+                {dietWarningCount > 0 && <Link className="quickLink" href={`/reports/${patient.id}/diet`}>
                   <strong>식습관</strong>
-                  <p className="subtext">주의 항목 {dietGuides.filter((guide) => guide.severity !== "safe").length}건</p>
-                </Link>
-                <Link className="quickLink" href={`/reports/${patient.id}/exercise`}>
+                  <p className="subtext">주의 항목 {dietWarningCount}건</p>
+                </Link>}
+                {exerciseWarningCount > 0 && <Link className="quickLink" href={`/reports/${patient.id}/exercise`}>
                   <strong>운동</strong>
                   <p className="subtext">
-                    활동 주의 {exerciseGuides.filter((guide) => guide.severity !== "safe").length}건
+                    활동 주의 {exerciseWarningCount}건
                   </p>
-                </Link>
+                </Link>}
               </div>
             </section>
+            )}
           </aside>
         </div>
+      )}
+      {!isLoading && patient && medications.length > 0 && (
+        <section className="panel">
+          <div className="sectionHeader">
+            <div>
+              <h2>분석 이력</h2>
+              <p className="subtext">이전에 저장한 리포트를 다시 확인할 수 있습니다.</p>
+            </div>
+          </div>
+
+          {reportHistory.length === 0 ? (
+            <p className="subtext">저장된 분석 이력이 없습니다.</p>
+          ) : (
+            <div className="stack">
+              {reportHistory.map((item) => (
+                <div className="historyRow" key={item.patientReportId}>
+                  <div>
+                    <strong>{formatDateTime(item.createdAt)}</strong>
+                    <div className="meta">
+                      <span>위험 {item.riskCount}건</span>
+                      <span>주의 {item.cautionCount}건</span>
+                      <span>약물 {item.medicationCount}개</span>
+                    </div>
+                  </div>
+                  <div className="rowActions">
+                    {item.isLatest && <span className="pill normal">최신</span>}
+                    {item.isStale && <span className="pill caution">재분석 필요</span>}
+                    <button
+                      className="button small secondary"
+                      type="button"
+                      onClick={() => openHistoryReport(item)}
+                      disabled={isHistoryLoading}
+                    >
+                      보기
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </AppShell>
   );
 }
 
 function AlertCard({ alert }: { alert: AnalysisAlert }) {
-  const className = alert.severity === "RISK" ? "risk" : alert.severity === "CAUTION" ? "caution" : "normal";
-  const severityLabel = alert.severity === "RISK" ? "위험" : alert.severity === "CAUTION" ? "주의" : "정상";
+  const tone = alert.severity === "RISK" ? "danger" : alert.severity === "CAUTION" ? "caution" : "safe";
+  const related = alert.relatedMedications.length > 0 ? alert.relatedMedications.join(", ") : "관련 약물 없음";
 
   return (
-    <article className={`alertCard ${className}`}>
-      <div className="alertTitle">
-        <span className={`dot ${className}`} aria-hidden="true" />
-        <h3>{alert.title}</h3>
-        <span className={`pill ${className}`}>{severityLabel}</span>
-      </div>
-      <p className="subtext" style={{ color: "#40504a" }}>
-        {alert.message}
-      </p>
-      <div className="tagList">
-        <span className="tag">{ruleLabels[alert.ruleType]}</span>
-        {alert.relatedMedications.map((medication) => (
-          <span className="tag" key={medication}>
-            {medication}
-          </span>
-        ))}
-        {alert.routeToProfessional && <span className="tag">전문가 확인 권장</span>}
-      </div>
-      <p className="source">
-        근거: {alert.evidence.map((item) => `${item.sourceName} (${item.sourceRecordId})`).join(", ")}
-      </p>
-    </article>
+    <YkAlertCard
+      tone={tone}
+      title={alert.title}
+      category={ruleLabels[alert.ruleType]}
+      reason={`${alert.message} 관련 약물: ${related}`}
+      guidance={
+        alert.routeToProfessional
+          ? "처방을 임의로 바꾸지 말고 현재 복용 목록과 이 알림을 주치의 또는 약사에게 보여주세요."
+          : "현재 복용 목록을 유지하되, 이상 증상이 있으면 보호자가 기록해 다음 상담 때 전달하세요."
+      }
+    />
   );
 }
 
@@ -480,9 +512,6 @@ function EvidenceTable({ rows }: { rows: Array<AlertEvidence & { alertTitle: str
         <thead>
           <tr>
             <th>알림</th>
-            <th>룰</th>
-            <th>출처</th>
-            <th>레코드</th>
             <th>설명</th>
           </tr>
         </thead>
@@ -490,9 +519,6 @@ function EvidenceTable({ rows }: { rows: Array<AlertEvidence & { alertTitle: str
           {rows.map((row) => (
             <tr key={`${row.alertTitle}-${row.sourceRecordId}-${row.description}`}>
               <td>{row.alertTitle}</td>
-              <td>{ruleLabels[row.ruleType]}</td>
-              <td>{row.sourceName}</td>
-              <td>{row.sourceRecordId}</td>
               <td>{row.description}</td>
             </tr>
           ))}
@@ -514,6 +540,28 @@ function flattenEvidence(report: AnalysisReport | null) {
       ruleType: alert.ruleType
     }))
   );
+}
+
+function buildSummaryText(report: AnalysisReport) {
+  const { riskCount, cautionCount, normalCount } = report.summary;
+  const totalAlertCount = riskCount + cautionCount;
+
+  if (totalAlertCount === 0) {
+    return `현재 선택된 약 ${normalCount}개에서는 위험 또는 주의 알림이 확인되지 않았습니다. 복용 약이 바뀌면 다시 확인해주세요.`;
+  }
+
+  const parts = [];
+  if (riskCount > 0) {
+    parts.push(`위험 알림 ${riskCount}건`);
+  }
+  if (cautionCount > 0) {
+    parts.push(`주의 알림 ${cautionCount}건`);
+  }
+  if (normalCount > 0) {
+    parts.push(`별도 알림 없는 약 ${normalCount}개`);
+  }
+
+  return `${parts.join(", ")}이 확인되었습니다. 위험 또는 주의 알림은 복용을 임의로 바꾸지 말고 의사나 약사에게 보여주세요.`;
 }
 
 function formatDateTime(value?: string | null) {
