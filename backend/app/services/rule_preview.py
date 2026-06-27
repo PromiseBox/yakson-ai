@@ -27,6 +27,7 @@ from app.models import (
     RuleType,
     Sex,
 )
+from app.services import pim_llm
 
 KST = timezone(timedelta(hours=9))
 ALERT_LIMIT_PER_RULE = 30
@@ -177,6 +178,9 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
         ]
     )
 
+    # [PIM 보강] 식약처 노인주의가 놓친 PIM(벤조/Z-drug/1세대 항히스타민)을 잠정 노인주의로 추가.
+    alerts.extend(_build_pim_alerts(payload, products, alerts))
+
     alerted_names = {
         related_name
         for alert in alerts
@@ -191,12 +195,7 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
         generatedAt=datetime.now(KST).isoformat(),
         analysisSource=AnalysisSource.RULE_PREVIEW,
         patient=payload.patient,
-        summary=ReportSummary(
-            riskCount=risk_count,
-            cautionCount=caution_count,
-            normalCount=normal_count,
-            unmatchedMedicationCount=0,
-        ),
+        summary=_build_summary(payload, alerts, risk_count, caution_count, normal_count),
         medications=[
             MedicationResult(
                 enteredDrugName=product.input_name,
@@ -213,6 +212,72 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
         ),
         pharmacistHandoffText=_build_handoff_text(payload, products, risk_count, caution_count),
     )
+
+
+def _build_pim_alerts(
+    payload: AnalyzeRequest,
+    products: list[SelectedProduct],
+    existing_alerts: list[AnalysisAlert],
+) -> list[AnalysisAlert]:
+    """노인 PIM 보강 알림(잠정 노인주의). 식약처 ELDERLY_CAUTION 중복분은 제외, 보수적 CAUTION."""
+    age = payload.patient.age_years
+    if not age or age < pim_llm.ELDERLY_AGE:
+        return []
+    covered = {
+        name
+        for alert in existing_alerts
+        if alert.rule_type == RuleType.ELDERLY_CAUTION
+        for name in alert.related_medications
+    }
+    extra: list[AnalysisAlert] = []
+    for product in products:
+        if product.product_name in covered:
+            continue
+        matched = pim_llm.match_pim(product.product_name)
+        if not matched:
+            continue
+        category, context = matched
+        covered.add(product.product_name)
+        extra.append(
+            AnalysisAlert(
+                alertId=_new_id("pim"),
+                severity=AlertSeverity.CAUTION,
+                ruleType=RuleType.ELDERLY_CAUTION,
+                title="노인주의(잠정·PIM)",
+                message=f"{context} (분류: {category})",
+                relatedMedications=[product.product_name],
+                evidence=[
+                    AlertEvidence(
+                        sourceType="PIM_CURATED_DRAFT",
+                        sourceName=pim_llm.PIM_SOURCE_NAME,
+                        sourceRecordId=category,
+                        description=context,
+                    )
+                ],
+                routeToProfessional=True,
+            )
+        )
+    return extra
+
+
+def _build_summary(
+    payload: AnalyzeRequest,
+    alerts: list[AnalysisAlert],
+    risk_count: int,
+    caution_count: int,
+    normal_count: int,
+) -> ReportSummary:
+    """ReportSummary + LLM 보호자 요약(summary.description)."""
+    summary = ReportSummary(
+        riskCount=risk_count,
+        cautionCount=caution_count,
+        normalCount=normal_count,
+        unmatchedMedicationCount=0,
+    )
+    summary.description = pim_llm.build_summary_description(
+        payload.patient, alerts, risk_count, caution_count, normal_count
+    )
+    return summary
 
 
 def _resolve_products(medications: list[MedicationInput], db: Session) -> list[SelectedProduct]:
