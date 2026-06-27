@@ -18,6 +18,7 @@ from app.services.analysis_storage import (
 )
 from app.services.graph_analyzer import GraphAnalysisUnavailable, analyze_medications_with_graph
 from app.services.rule_preview import build_preview_report, fetch_drug_for_validation
+from app.services.pim_llm import augment_report
 
 router = APIRouter(prefix="/api", tags=["analysis-preview"])
 logger = logging.getLogger("uvicorn.error")
@@ -56,7 +57,8 @@ def _build_preferred_analysis_report(payload: AnalyzeRequest, db: Session) -> An
             len(payload.medications),
             elapsed_ms,
         )
-        return report
+        # [PIM/요약 보강] 그래프 결과에 노인 PIM 노인주의 + summary.description 멱등 보강.
+        return augment_report(report)
     except GraphAnalysisUnavailable as exc:
         elapsed_ms = round((time.perf_counter() - started_at) * 1000)
         logger.warning(
@@ -80,7 +82,8 @@ def _build_preferred_analysis_report(payload: AnalyzeRequest, db: Session) -> An
         len(payload.medications),
         elapsed_ms,
     )
-    return report
+    # [PIM/요약 보강] 룰 폴백 결과에도 동일 보강(build_preview_report와 멱등 — 중복 적용 안 됨).
+    return augment_report(report)
 
 
 def _analysis_request_from_patient(patient_id: int, db: Session) -> AnalyzeRequest:
