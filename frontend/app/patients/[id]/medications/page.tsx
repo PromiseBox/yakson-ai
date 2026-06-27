@@ -18,11 +18,17 @@ import {
   YkSectionHeader,
   YkStatusPill
 } from "@/components/ui/design-system";
-import { groupMedicationsByCategory, prescriptionCategories, sexLabel } from "@/lib/app-store";
+import {
+  groupMedicationsByCategory,
+  mergePrescriptionCategories,
+  prescriptionCategories,
+  sexLabel
+} from "@/lib/app-store";
 import {
   createMedicationOnServer,
   deleteMedicationOnServer,
   getPatientById,
+  listPrescriptionCategories,
   listPatientMedications,
   searchDrugs,
   updateMedicationOnServer,
@@ -31,12 +37,24 @@ import {
 import { toUserErrorMessage } from "@/lib/error-messages";
 import { DrugSearchItem, MedicationRecord, PatientRecord, PrescriptionCategory } from "@/lib/types";
 
+const DEFAULT_CATEGORY = "내과";
+const CUSTOM_CATEGORY = "기타";
+
+function resolveCategoryName(category: PrescriptionCategory, customCategory: string) {
+  if (category === CUSTOM_CATEGORY) {
+    return customCategory.trim();
+  }
+  return category.trim();
+}
+
 export default function MedicationInputPage() {
   const params = useParams<{ id: string }>();
   const patientId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [patient, setPatient] = useState<PatientRecord | null>(null);
   const [medications, setMedications] = useState<MedicationRecord[]>([]);
-  const [category, setCategory] = useState<PrescriptionCategory>("내과");
+  const [savedCategories, setSavedCategories] = useState<PrescriptionCategory[]>(prescriptionCategories);
+  const [category, setCategory] = useState<PrescriptionCategory>(DEFAULT_CATEGORY);
+  const [customCategory, setCustomCategory] = useState("");
   const [drugName, setDrugName] = useState("");
   const [selectedDrug, setSelectedDrug] = useState<DrugSearchItem | null>(null);
   const [searchResults, setSearchResults] = useState<DrugSearchItem[]>([]);
@@ -52,7 +70,8 @@ export default function MedicationInputPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editTarget, setEditTarget] = useState<MedicationRecord | null>(null);
-  const [editCategory, setEditCategory] = useState<PrescriptionCategory>("내과");
+  const [editCategory, setEditCategory] = useState<PrescriptionCategory>(DEFAULT_CATEGORY);
+  const [editCustomCategory, setEditCustomCategory] = useState("");
   const [editDurationDays, setEditDurationDays] = useState("");
   const [editDosesPerDay, setEditDosesPerDay] = useState("");
   const [editDoseAmount, setEditDoseAmount] = useState("");
@@ -111,17 +130,39 @@ export default function MedicationInputPage() {
   }, [drugName, selectedDrug]);
 
   const grouped = useMemo(() => groupMedicationsByCategory(medications), [medications]);
+  const categoryOptions = useMemo(
+    () =>
+      mergePrescriptionCategories(
+        prescriptionCategories,
+        savedCategories,
+        medications.map((medication) => medication.category),
+        category !== CUSTOM_CATEGORY ? [category] : [],
+        editCategory !== CUSTOM_CATEGORY ? [editCategory] : []
+      ),
+    [category, editCategory, medications, savedCategories]
+  );
+  const medicationCountByCategory = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const medication of medications) {
+      counts.set(medication.category, (counts.get(medication.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [medications]);
+  const activeCategoryName = resolveCategoryName(category, customCategory);
+  const activeCategoryLabel = activeCategoryName || CUSTOM_CATEGORY;
 
   async function refreshPage() {
     setIsLoading(true);
     setPageError("");
     try {
-      const [nextPatient, nextMedications] = await Promise.all([
+      const [nextPatient, nextMedications, nextCategories] = await Promise.all([
         getPatientById(patientId),
-        listPatientMedications(patientId)
+        listPatientMedications(patientId),
+        listPrescriptionCategories()
       ]);
       setPatient(nextPatient);
       setMedications(nextMedications);
+      setSavedCategories(nextCategories);
     } catch (caught) {
       setPatient(null);
       setMedications([]);
@@ -145,6 +186,23 @@ export default function MedicationInputPage() {
     setSelectedDrug(null);
     setError("");
     setNotice("");
+  }
+
+  function selectCategory(nextCategory: PrescriptionCategory) {
+    setCategory(nextCategory);
+    if (nextCategory !== CUSTOM_CATEGORY) {
+      setCustomCategory("");
+    }
+    setError("");
+    setNotice("");
+  }
+
+  function selectEditCategory(nextCategory: PrescriptionCategory) {
+    setEditCategory(nextCategory);
+    if (nextCategory !== CUSTOM_CATEGORY) {
+      setEditCustomCategory("");
+    }
+    setEditError("");
   }
 
   async function submitMedication(event: FormEvent<HTMLFormElement>) {
@@ -172,6 +230,12 @@ export default function MedicationInputPage() {
       return;
     }
 
+    const nextCategoryName = resolveCategoryName(category, customCategory);
+    if (!nextCategoryName) {
+      setError("기타 항목명을 입력해주세요.");
+      return;
+    }
+
     if (!selectedDrug?.productCode) {
       setError("서비스 대상 아님: 식약처 DB 자동완성 결과에서 약물을 선택해야 저장할 수 있습니다.");
       return;
@@ -184,7 +248,7 @@ export default function MedicationInputPage() {
     try {
       const validatedDrug = await validateDrug(selectedDrug.productCode, selectedDrug.itemSeq);
       await createMedicationOnServer(patient.id, {
-        categoryName: category,
+        categoryName: nextCategoryName,
         enteredDrugName: validatedDrug.productName,
         productCode: validatedDrug.productCode,
         itemSeq: validatedDrug.itemSeq,
@@ -201,7 +265,10 @@ export default function MedicationInputPage() {
       setDosesPerDay("1");
       setDoseAmount("1");
       setDoseUnit("정");
-      setNotice("약 정보를 저장했습니다.");
+      setCategory(nextCategoryName);
+      setCustomCategory("");
+      setSavedCategories((current) => mergePrescriptionCategories(current, [nextCategoryName]));
+      setNotice(`${nextCategoryName} 항목에 약 정보를 저장했습니다.`);
       await refreshPage();
     } catch (caught) {
       setError(toUserErrorMessage(caught, "선택한 약 정보를 저장하지 못했습니다."));
@@ -225,6 +292,7 @@ export default function MedicationInputPage() {
   function openEditMedication(medication: MedicationRecord) {
     setEditTarget(medication);
     setEditCategory(medication.category);
+    setEditCustomCategory("");
     setEditDurationDays(String(medication.durationDays));
     setEditDosesPerDay(String(medication.dosesPerDay));
     setEditDoseAmount(String(medication.doseAmount));
@@ -266,18 +334,25 @@ export default function MedicationInputPage() {
       return;
     }
 
+    const nextCategoryName = resolveCategoryName(editCategory, editCustomCategory);
+    if (!nextCategoryName) {
+      setEditError("기타 항목명을 입력해주세요.");
+      return;
+    }
+
     setIsEditing(true);
     setEditError("");
 
     try {
       await updateMedicationOnServer(editTarget.id, {
-        categoryName: editCategory,
+        categoryName: nextCategoryName,
         durationDays: parsedDuration,
         dosesPerDay: parsedDoses,
         doseAmount: parsedAmount,
         doseUnit: editDoseUnit.trim() || "정"
       });
       setEditTarget(null);
+      setSavedCategories((current) => mergePrescriptionCategories(current, [nextCategoryName]));
       setNotice("약 정보를 수정했습니다.");
       await refreshPage();
     } catch (caught) {
@@ -337,20 +412,33 @@ export default function MedicationInputPage() {
             </YkNoticeBox>
 
             <form className="stack yk-product-form" onSubmit={submitMedication}>
-              <div className="fieldLabel">
-                처방 대분류
-                <div className="chipGroup">
-                  {prescriptionCategories.map((item) => (
-                    <button
-                      className={`chip ${category === item ? "selected" : ""}`}
-                      key={item}
-                      type="button"
-                      onClick={() => setCategory(item)}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
+              <CategorySelector
+                categories={categoryOptions}
+                selectedCategory={category}
+                counts={medicationCountByCategory}
+                onSelect={selectCategory}
+              />
+
+              {category === CUSTOM_CATEGORY && (
+                <label className="fieldLabel">
+                  기타 항목명
+                  <input
+                    className="input"
+                    value={customCategory}
+                    onChange={(event) => {
+                      setCustomCategory(event.target.value);
+                      setError("");
+                    }}
+                    placeholder="예: A병원, 피부과, 한의원"
+                    maxLength={30}
+                  />
+                </label>
+              )}
+
+              <div className="activeCategoryBar">
+                <span>입력 항목</span>
+                <strong>{activeCategoryLabel}</strong>
+                <span>{medicationCountByCategory.get(activeCategoryName) ?? 0}개</span>
               </div>
 
               <label className="fieldLabel">
@@ -421,7 +509,11 @@ export default function MedicationInputPage() {
                 </YkInlineAlert>
               )}
 
-              <YkButton icon={Plus} type="submit" disabled={isAdding || !selectedDrug}>
+              <YkButton
+                icon={Plus}
+                type="submit"
+                disabled={isAdding || !selectedDrug || (category === CUSTOM_CATEGORY && !customCategory.trim())}
+              >
                 {isAdding ? "저장 중" : "약 정보 저장"}
               </YkButton>
             </form>
@@ -455,6 +547,16 @@ export default function MedicationInputPage() {
                       <YkStatusPill tone="brand" count={group.medications.length}>
                         등록
                       </YkStatusPill>
+                      <div className="rowActions">
+                        <YkButton
+                          className="yk-button-compact"
+                          variant="secondary"
+                          type="button"
+                          onClick={() => selectCategory(group.category)}
+                        >
+                          입력
+                        </YkButton>
+                      </div>
                     </div>
                     <div className="drugList">
                       {group.medications.map((medication) => (
@@ -491,21 +593,28 @@ export default function MedicationInputPage() {
             </div>
 
             <div className="stack">
-              <div className="fieldLabel">
-                처방 대분류
-                <div className="chipGroup">
-                  {prescriptionCategories.map((item) => (
-                    <button
-                      className={`chip ${editCategory === item ? "selected" : ""}`}
-                      key={item}
-                      type="button"
-                      onClick={() => setEditCategory(item)}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <CategorySelector
+                categories={categoryOptions}
+                selectedCategory={editCategory}
+                counts={medicationCountByCategory}
+                onSelect={selectEditCategory}
+              />
+
+              {editCategory === CUSTOM_CATEGORY && (
+                <label className="fieldLabel">
+                  기타 항목명
+                  <input
+                    className="input"
+                    value={editCustomCategory}
+                    onChange={(event) => {
+                      setEditCustomCategory(event.target.value);
+                      setEditError("");
+                    }}
+                    placeholder="예: A병원, 피부과, 한의원"
+                    maxLength={30}
+                  />
+                </label>
+              )}
 
               <div className="formGrid">
                 <label className="fieldLabel">
@@ -560,6 +669,39 @@ export default function MedicationInputPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function CategorySelector({
+  categories,
+  selectedCategory,
+  counts,
+  onSelect
+}: {
+  categories: PrescriptionCategory[];
+  selectedCategory: PrescriptionCategory;
+  counts: Map<string, number>;
+  onSelect: (category: PrescriptionCategory) => void;
+}) {
+  return (
+    <div className="fieldLabel">
+      입력 항목
+      <div className="categoryPicker" role="tablist" aria-label="약 입력 항목">
+        {categories.map((item) => (
+          <button
+            className={`categoryTab ${selectedCategory === item ? "selected" : ""}`}
+            key={item}
+            type="button"
+            role="tab"
+            aria-selected={selectedCategory === item}
+            onClick={() => onSelect(item)}
+          >
+            <span>{item}</span>
+            <small>{item === CUSTOM_CATEGORY ? "직접 입력" : `${counts.get(item) ?? 0}개`}</small>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
