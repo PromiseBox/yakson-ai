@@ -566,6 +566,18 @@ h3 {
   gap: 12px;
 }
 
+.yk-report-meta-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.yk-report-meta-row .subtext {
+  margin: 0;
+}
+
 .yk-report-summary-description {
   border: 1px solid var(--yk-line);
   border-radius: var(--yk-radius);

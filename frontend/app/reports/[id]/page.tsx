@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
 import {
   YkAlertCard,
+  YkBadge,
   YkButton,
   YkCard,
   YkErrorState,
@@ -118,6 +119,8 @@ export default function PatientDashboardPage() {
   const latestReportId = reportHistory[0]?.reportId ?? null;
   const isViewingLatestReport = Boolean(report && latestReportId && report.reportId === latestReportId);
   const reportTimestamp = report?.savedAt ?? report?.generatedAt ?? "";
+  const analysisSourceLabel = report ? getAnalysisSourceLabel(report) : "";
+  const analysisSourceTone = report ? getAnalysisSourceTone(report) : "neutral";
 
   async function runPreview() {
     if (!patient) {
@@ -274,9 +277,10 @@ export default function PatientDashboardPage() {
               )}
               {reportError && <YkErrorState title="분석 리포트를 처리하지 못했습니다" description={reportError} />}
               {report && (
-                <p className="subtext" style={{ marginTop: 10 }}>
-                  저장일 {formatDateTime(reportTimestamp)}
-                </p>
+                <div className="yk-report-meta-row">
+                  <p className="subtext">저장일 {formatDateTime(reportTimestamp)}</p>
+                  <YkBadge tone={analysisSourceTone}>{analysisSourceLabel}</YkBadge>
+                </div>
               )}
               {report && !isViewingLatestReport && (
                 <YkNoticeBox title="과거 리포트를 보고 있습니다" tone="caution">
@@ -575,6 +579,25 @@ function flattenEvidence(report: AnalysisReport | null) {
       ruleType: alert.ruleType
     }))
   );
+}
+
+function isGraphAnalysisReport(report: AnalysisReport) {
+  if (report.analysisSource === "GRAPH") {
+    return true;
+  }
+
+  return (
+    report.caregiverGuidance.includes("Neo4j") ||
+    report.alerts.some((alert) => alert.evidence.some((evidence) => evidence.sourceName.startsWith("neo4j_")))
+  );
+}
+
+function getAnalysisSourceLabel(report: AnalysisReport) {
+  return isGraphAnalysisReport(report) ? "Graph DB 분석" : "룰 기반 fallback";
+}
+
+function getAnalysisSourceTone(report: AnalysisReport): "brand" | "caution" {
+  return isGraphAnalysisReport(report) ? "brand" : "caution";
 }
 
 function getLlmSummaryDescription(report: AnalysisReport) {

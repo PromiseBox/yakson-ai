@@ -1,0 +1,123 @@
+name: Load Neo4j Graph
+
+on:
+  workflow_dispatch:
+    inputs:
+      resetGraph:
+        description: Delete Yakson graph labels before loading.
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+      includePatients:
+        description: Include patient medication nodes.
+        required: true
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+      patientIdScope:
+        description: Optional comma-separated patient IDs for a scoped load.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: promisebox-yakson
+  PROJECT_NUMBER: "331844024784"
+  REGION: asia-northeast3
+  ARTIFACT_REGISTRY_REPOSITORY: yakson
+  LOADER_JOB: yakson-neo4j-loader
+  RUNTIME_SERVICE_ACCOUNT: yakson-runner@promisebox-yakson.iam.gserviceaccount.com
+  DEPLOYER_SERVICE_ACCOUNT: yakson-deployer@promisebox-yakson.iam.gserviceaccount.com
+  WORKLOAD_IDENTITY_PROVIDER: projects/331844024784/locations/global/workloadIdentityPools/github-actions/providers/yakson-ai
+  CLOUDSQL_CONNECTION_NAME: promisebox-yakson:asia-northeast3:yakson-postgres
+  NEO4J_URI: bolt+s://2ce628a4.databases.neo4j.io
+  NEO4J_USERNAME: neo4j
+  NEO4J_DATABASE: neo4j
+
+jobs:
+  load:
+    name: Build loader and execute Cloud Run Job
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build loader arguments
+        env:
+          RESET_GRAPH: ${{ inputs.resetGraph }}
+          INCLUDE_PATIENTS: ${{ inputs.includePatients }}
+          PATIENT_ID_SCOPE: ${{ inputs.patientIdScope }}
+        run: |
+          load_args="scripts/load_neo4j_graph.py"
+          if [[ "${RESET_GRAPH}" == "true" ]]; then
+            load_args="${load_args},--reset-yakson-graph"
+          fi
+          if [[ "${INCLUDE_PATIENTS}" != "true" ]]; then
+            load_args="${load_args},--skip-patients"
+          fi
+          if [[ -n "${PATIENT_ID_SCOPE}" ]]; then
+            IFS=',' read -ra patient_ids <<< "${PATIENT_ID_SCOPE}"
+            for patient_id in "${patient_ids[@]}"; do
+              patient_id="${patient_id//[[:space:]]/}"
+              if [[ -n "${patient_id}" ]]; then
+                load_args="${load_args},--patient-id-scope,${patient_id}"
+              fi
+            done
+          fi
+          echo "LOAD_ARGS=${load_args}" >> "${GITHUB_ENV}"
+
+      - name: Build and push loader image
+        env:
+          LOADER_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.LOADER_JOB }}:${{ github.sha }}
+        run: |
+          docker build -t "${LOADER_IMAGE}" ./backend
+          docker push "${LOADER_IMAGE}"
+
+      - name: Deploy loader job
+        env:
+          LOADER_IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.LOADER_JOB }}:${{ github.sha }}
+        run: |
+          gcloud run jobs deploy "${LOADER_JOB}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --image "${LOADER_IMAGE}" \
+            --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --add-cloudsql-instances "${CLOUDSQL_CONNECTION_NAME}" \
+            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,NEO4J_URI=${NEO4J_URI},NEO4J_USERNAME=${NEO4J_USERNAME},NEO4J_DATABASE=${NEO4J_DATABASE}" \
+            --set-secrets "DATABASE_URL=yakson-database-url:latest,NEO4J_PASSWORD=yakson-neo4j-password:latest" \
+            --command "python" \
+            --args "${LOAD_ARGS}" \
+            --tasks 1 \
+            --max-retries 0 \
+            --task-timeout 7200 \
+            --cpu 2 \
+            --memory 2Gi \
+            --quiet
+
+      - name: Execute loader job
+        run: |
+          gcloud run jobs execute "${LOADER_JOB}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --wait

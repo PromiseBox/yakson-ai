@@ -132,3 +132,27 @@ gcloud secrets add-iam-policy-binding yakson-neo4j-password \
 
 Neo4j AuraDB는 `bolt+s://...` URI를 사용한다. `neo4j+s://...` 라우팅이 막히는
 Aura 환경에서도 `bolt+s://...`는 Cloud Run에서 직접 연결할 수 있다.
+
+## Neo4j Graph 재적재
+
+Cloud SQL의 DUR 데이터가 갱신되면 GitHub Actions의 `Load Neo4j Graph` workflow를
+수동 실행한다. 이 workflow는 백엔드 이미지를 빌드한 뒤 `yakson-neo4j-loader`
+Cloud Run Job을 배포하고 실행한다.
+
+기본 입력값:
+
+```text
+resetGraph=true
+includePatients=true
+patientIdScope=
+```
+
+특정 환자 검증용으로만 좁혀 적재할 때는 `patientIdScope`에 `22` 또는 `22,23`처럼
+쉼표로 구분한 환자 ID를 입력한다. 운영 전체 재적재는 `patientIdScope`를 비워둔다.
+
+재적재 후 대표 회귀 케이스는 다음 스크립트로 확인한다.
+
+```bash
+cd backend
+python scripts/verify_analysis_regression.py --patient-id 22
+```

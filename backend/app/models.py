@@ -22,6 +22,11 @@ class AlertSeverity(str, Enum):
     NORMAL = "NORMAL"
 
 
+class AnalysisSource(str, Enum):
+    GRAPH = "GRAPH"
+    RULE_PREVIEW = "RULE_PREVIEW"
+
+
 class RuleType(str, Enum):
     PRODUCT_INTERACTION = "PRODUCT_INTERACTION"
     INGREDIENT_INTERACTION = "INGREDIENT_INTERACTION"
@@ -118,6 +123,7 @@ class AnalysisReport(BaseModel):
     generated_at: str = Field(alias="generatedAt")
     saved_at: str | None = Field(default=None, alias="savedAt")
     is_stale: bool = Field(default=False, alias="isStale")
+    analysis_source: AnalysisSource = Field(default=AnalysisSource.RULE_PREVIEW, alias="analysisSource")
     patient: PatientInput
     summary: ReportSummary
     medications: list[MedicationResult]

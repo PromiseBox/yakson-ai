@@ -13,6 +13,7 @@ from app.models import (
     AlertSeverity,
     AnalysisAlert,
     AnalysisReport,
+    AnalysisSource,
     AnalyzeRequest,
     MatchStatus,
     MedicationResult,
@@ -357,6 +358,7 @@ def analyze_medications_with_graph(payload: AnalyzeRequest, db: Session) -> Anal
     return AnalysisReport(
         reportId=_new_graph_id("graph"),
         generatedAt=datetime.now(KST).isoformat(),
+        analysisSource=AnalysisSource.GRAPH,
         patient=payload.patient,
         summary=ReportSummary(
             riskCount=sum(1 for alert in alerts if alert.severity == AlertSeverity.RISK),

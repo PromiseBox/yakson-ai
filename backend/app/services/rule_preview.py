@@ -17,6 +17,7 @@ from app.models import (
     AlertSeverity,
     AnalysisAlert,
     AnalysisReport,
+    AnalysisSource,
     AnalyzeRequest,
     DrugSearchItem,
     MatchStatus,
@@ -188,6 +189,7 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
     return AnalysisReport(
         reportId=_new_id("preview"),
         generatedAt=datetime.now(KST).isoformat(),
+        analysisSource=AnalysisSource.RULE_PREVIEW,
         patient=payload.patient,
         summary=ReportSummary(
             riskCount=risk_count,

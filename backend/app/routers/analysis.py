@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -46,13 +47,40 @@ def preview_analysis(
 
 
 def _build_preferred_analysis_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport:
+    started_at = time.perf_counter()
     try:
-        return analyze_medications_with_graph(payload, db)
+        report = analyze_medications_with_graph(payload, db)
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        logger.info(
+            "analysis_source=GRAPH fallback=false medication_count=%s duration_ms=%s",
+            len(payload.medications),
+            elapsed_ms,
+        )
+        return report
     except GraphAnalysisUnavailable as exc:
-        logger.warning("Neo4j graph analysis unavailable; falling back to rule preview: %s", exc)
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        logger.warning(
+            "analysis_source=RULE_PREVIEW fallback=true reason=graph_unavailable medication_count=%s duration_ms=%s error=%s",
+            len(payload.medications),
+            elapsed_ms,
+            exc,
+        )
     except Exception:
-        logger.exception("Neo4j graph analysis failed unexpectedly; falling back to rule preview.")
-    return build_preview_report(payload, db)
+        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+        logger.exception(
+            "analysis_source=RULE_PREVIEW fallback=true reason=graph_error medication_count=%s duration_ms=%s",
+            len(payload.medications),
+            elapsed_ms,
+        )
+
+    report = build_preview_report(payload, db)
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+    logger.info(
+        "analysis_source=RULE_PREVIEW fallback=true medication_count=%s duration_ms=%s",
+        len(payload.medications),
+        elapsed_ms,
+    )
+    return report
 
 
 def _analysis_request_from_patient(patient_id: int, db: Session) -> AnalyzeRequest:

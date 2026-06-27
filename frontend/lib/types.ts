@@ -1,5 +1,6 @@
 export type Sex = "FEMALE" | "MALE" | "UNKNOWN";
 export type AlertSeverity = "RISK" | "CAUTION" | "NORMAL";
+export type AnalysisSource = "GRAPH" | "RULE_PREVIEW";
 export type MatchStatus = "MATCHED" | "UNMATCHED" | "NEEDS_REVIEW";
 
 export type PatientInput = {
@@ -68,6 +69,7 @@ export type AnalysisReport = {
   generatedAt: string;
   savedAt?: string | null;
   isStale?: boolean;
+  analysisSource?: AnalysisSource;
   patient: PatientInput;
   summary: {
     riskCount: number;
