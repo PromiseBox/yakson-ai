@@ -64,6 +64,18 @@ export type AnalysisAlert = {
   routeToProfessional: boolean;
 };
 
+export type AlertExplanation = {
+  alertId: string;
+  severity: AlertSeverity;
+  ruleType: RuleType;
+  title: string;
+  relatedMedications: string[];
+  plainLanguageReason: string;
+  caregiverAction: string;
+  professionalQuestion: string;
+  evidenceSummary: string;
+};
+
 export type AnalysisReport = {
   reportId: string;
   generatedAt: string;
@@ -87,6 +99,10 @@ export type AnalysisReport = {
   llmSummaryText?: string | null;
   caregiverSummaryText?: string | null;
   pharmacistSummaryText?: string | null;
+  caregiverDetailText?: string | null;
+  pharmacistDetailText?: string | null;
+  recommendedQuestions?: string[];
+  alertExplanations?: AlertExplanation[];
   aiSummarySource?: "OPENAI" | "TEMPLATE" | string | null;
   aiModel?: string | null;
   aiPromptVersion?: string | null;

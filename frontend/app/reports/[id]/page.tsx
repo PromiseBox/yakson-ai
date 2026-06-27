@@ -30,6 +30,7 @@ import {
 import { toUserErrorMessage } from "@/lib/error-messages";
 import {
   AlertEvidence,
+  AlertExplanation,
   AnalysisAlert,
   AnalysisReport,
   AnalysisReportHistoryItem,
@@ -199,7 +200,12 @@ export default function PatientDashboardPage() {
 
   const llmSummaryText = report ? getLlmSummaryDescription(report) : "";
   const summaryText = report ? llmSummaryText || buildFallbackSummaryText(report) : "";
-  const pharmacistSummaryText = report ? report.pharmacistSummaryText || report.pharmacistHandoffText : "";
+  const caregiverDetailText = report?.caregiverDetailText?.trim() ?? "";
+  const alertExplanations = report?.alertExplanations ?? [];
+  const recommendedQuestions = report?.recommendedQuestions ?? [];
+  const pharmacistSummaryText = report
+    ? report.pharmacistDetailText?.trim() || report.pharmacistSummaryText || report.pharmacistHandoffText
+    : "";
   const dietWarningCount = dietGuides.filter((guide) => guide.severity !== "safe").length;
   const exerciseWarningCount = exerciseGuides.filter((guide) => guide.severity !== "safe").length;
   const hasLifestyleReport = dietWarningCount > 0 || exerciseWarningCount > 0;
@@ -338,6 +344,25 @@ export default function PatientDashboardPage() {
               )}
             </section>
 
+            {report && (caregiverDetailText || alertExplanations.length > 0) && (
+              <section className="panel">
+                <div className="sectionHeader">
+                  <div>
+                    <h2>상세 리포트</h2>
+                    <p className="subtext">보호자 상담 준비에 필요한 이유, 확인 행동, 질문을 자세히 정리합니다.</p>
+                  </div>
+                </div>
+                {caregiverDetailText && <p className="yk-report-long-text">{caregiverDetailText}</p>}
+                {alertExplanations.length > 0 && (
+                  <div className="yk-detail-report-list">
+                    {alertExplanations.map((explanation) => (
+                      <ReportExplanationCard explanation={explanation} key={explanation.alertId} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             <section className="panel">
               <div className="sectionHeader">
                 <div>
@@ -433,14 +458,30 @@ export default function PatientDashboardPage() {
                 <div className="sectionHeader">
                   <div>
                     <h2>약사 전달 요약</h2>
-                    <p className="subtext">상담 시 보여줄 수 있는 짧은 요약입니다.</p>
+                    <p className="subtext">상담 시 보여줄 수 있는 전문 확인 메모입니다.</p>
                   </div>
                   <button className="yk-button yk-button-secondary yk-button-compact" type="button" onClick={copyPharmacistHandoff}>
                     <Copy size={15} />
                     {hasCopiedHandoff ? "복사됨" : "복사하기"}
                   </button>
                 </div>
-                <p className="subtext">{pharmacistSummaryText}</p>
+                <p className="yk-report-long-text yk-report-long-text-compact">{pharmacistSummaryText}</p>
+              </section>
+            )}
+
+            {report && recommendedQuestions.length > 0 && (
+              <section className="panel">
+                <div className="sectionHeader">
+                  <div>
+                    <h2>상담 질문</h2>
+                    <p className="subtext">병원이나 약국에 그대로 보여줄 수 있는 질문입니다.</p>
+                  </div>
+                </div>
+                <ol className="yk-question-list">
+                  {recommendedQuestions.map((question) => (
+                    <li key={question}>{question}</li>
+                  ))}
+                </ol>
               </section>
             )}
 
@@ -526,6 +567,44 @@ export default function PatientDashboardPage() {
   );
 }
 
+function ReportExplanationCard({ explanation }: { explanation: AlertExplanation }) {
+  const related = explanation.relatedMedications.length > 0
+    ? explanation.relatedMedications.join(", ")
+    : "관련 약물 없음";
+
+  return (
+    <article className="yk-detail-report-card">
+      <header>
+        <div>
+          <h3>{explanation.title}</h3>
+          <p>{ruleLabels[explanation.ruleType]}</p>
+        </div>
+        <YkBadge tone={getAlertExplanationTone(explanation)}>
+          {getAlertExplanationLabel(explanation)}
+        </YkBadge>
+      </header>
+      <div className="yk-detail-report-grid">
+        <div>
+          <span>관련 약물</span>
+          <p>{related}</p>
+        </div>
+        <div>
+          <span>이유</span>
+          <p>{explanation.plainLanguageReason}</p>
+        </div>
+        <div>
+          <span>보호자 확인</span>
+          <p>{explanation.caregiverAction}</p>
+        </div>
+        <div>
+          <span>상담 질문</span>
+          <p>{explanation.professionalQuestion}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function AlertCard({ alert }: { alert: AnalysisAlert }) {
   const tone = alert.severity === "RISK" ? "danger" : alert.severity === "CAUTION" ? "caution" : "safe";
   const related = alert.relatedMedications.length > 0 ? alert.relatedMedications.join(", ") : "관련 약물 없음";
@@ -599,6 +678,26 @@ function getAnalysisSourceLabel(report: AnalysisReport) {
 
 function getAnalysisSourceTone(report: AnalysisReport): "brand" | "caution" {
   return isGraphAnalysisReport(report) ? "brand" : "caution";
+}
+
+function getAlertExplanationTone(explanation: AlertExplanation): "danger" | "caution" | "safe" {
+  if (explanation.severity === "RISK") {
+    return "danger";
+  }
+  if (explanation.severity === "CAUTION") {
+    return "caution";
+  }
+  return "safe";
+}
+
+function getAlertExplanationLabel(explanation: AlertExplanation) {
+  if (explanation.severity === "RISK") {
+    return "위험";
+  }
+  if (explanation.severity === "CAUTION") {
+    return "주의";
+  }
+  return "정상";
 }
 
 function getLlmSummaryDescription(report: AnalysisReport) {

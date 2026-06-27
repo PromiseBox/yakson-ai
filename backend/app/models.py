@@ -111,6 +111,18 @@ class AnalysisAlert(BaseModel):
     route_to_professional: bool = Field(alias="routeToProfessional")
 
 
+class AlertExplanation(BaseModel):
+    alert_id: str = Field(alias="alertId")
+    severity: AlertSeverity
+    rule_type: RuleType = Field(alias="ruleType")
+    title: str
+    related_medications: list[str] = Field(alias="relatedMedications")
+    plain_language_reason: str = Field(alias="plainLanguageReason")
+    caregiver_action: str = Field(alias="caregiverAction")
+    professional_question: str = Field(alias="professionalQuestion")
+    evidence_summary: str = Field(alias="evidenceSummary")
+
+
 class ReportSummary(BaseModel):
     risk_count: int = Field(alias="riskCount")
     caution_count: int = Field(alias="cautionCount")
@@ -135,6 +147,10 @@ class AnalysisReport(BaseModel):
     pharmacist_handoff_text: str = Field(alias="pharmacistHandoffText")
     caregiver_summary_text: str | None = Field(default=None, alias="caregiverSummaryText")
     pharmacist_summary_text: str | None = Field(default=None, alias="pharmacistSummaryText")
+    caregiver_detail_text: str | None = Field(default=None, alias="caregiverDetailText")
+    pharmacist_detail_text: str | None = Field(default=None, alias="pharmacistDetailText")
+    recommended_questions: list[str] = Field(default_factory=list, alias="recommendedQuestions")
+    alert_explanations: list[AlertExplanation] = Field(default_factory=list, alias="alertExplanations")
     ai_summary_source: str | None = Field(default=None, alias="aiSummarySource")
     ai_model: str | None = Field(default=None, alias="aiModel")
     ai_prompt_version: str | None = Field(default=None, alias="aiPromptVersion")

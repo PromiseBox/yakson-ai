@@ -72,6 +72,10 @@ def summary_dict(report: AnalysisReport) -> dict[str, Any]:
         "normalCount": report.summary.normal_count,
         "unmatchedMedicationCount": report.summary.unmatched_medication_count,
         "hasSummaryDescription": bool(report.summary.description),
+        "hasCaregiverDetail": bool(report.caregiver_detail_text),
+        "hasPharmacistDetail": bool(report.pharmacist_detail_text),
+        "recommendedQuestionCount": len(report.recommended_questions),
+        "alertExplanationCount": len(report.alert_explanations),
         "aiSummarySource": report.ai_summary_source,
     }
 
@@ -126,11 +130,22 @@ def assert_ai_report_texts(label: str, report: AnalysisReport) -> None:
         raise AssertionError(f"{label} missing caregiverSummaryText.")
     if not report.pharmacist_summary_text:
         raise AssertionError(f"{label} missing pharmacistSummaryText.")
+    if not report.caregiver_detail_text:
+        raise AssertionError(f"{label} missing caregiverDetailText.")
+    if not report.pharmacist_detail_text:
+        raise AssertionError(f"{label} missing pharmacistDetailText.")
+    if len(report.recommended_questions) < 2:
+        raise AssertionError(f"{label} recommendedQuestions too short: {report.recommended_questions}")
+    if len(report.alert_explanations) != len(report.alerts):
+        raise AssertionError(
+            f"{label} alertExplanations count mismatch. "
+            f"alerts={len(report.alerts)} explanations={len(report.alert_explanations)}"
+        )
     if report.summary.description != report.caregiver_summary_text:
         raise AssertionError(f"{label} summary.description does not match caregiverSummaryText.")
     if report.ai_summary_source not in {"TEMPLATE", "OPENAI"}:
         raise AssertionError(f"{label} invalid aiSummarySource: {report.ai_summary_source}")
-    if report.ai_prompt_version != "yakson-ai-report-v1":
+    if report.ai_prompt_version != "yakson-ai-report-v2":
         raise AssertionError(f"{label} invalid aiPromptVersion: {report.ai_prompt_version}")
 
 
