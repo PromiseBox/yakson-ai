@@ -64,8 +64,8 @@ jobs:
             --port 8080 \
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --add-cloudsql-instances "${CLOUDSQL_CONNECTION_NAME}" \
-            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL}" \
-            --set-secrets "DATABASE_URL=yakson-database-url:latest,BACKEND_SHARED_SECRET=yakson-backend-shared-secret:latest" \
+            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL},NEO4J_ANALYSIS_ENABLED=true,NEO4J_URI=bolt+s://2ce628a4.databases.neo4j.io,NEO4J_USERNAME=neo4j,NEO4J_DATABASE=neo4j" \
+            --set-secrets "DATABASE_URL=yakson-database-url:latest,BACKEND_SHARED_SECRET=yakson-backend-shared-secret:latest,NEO4J_PASSWORD=yakson-neo4j-password:latest" \
             --allow-unauthenticated \
             --quiet
 
