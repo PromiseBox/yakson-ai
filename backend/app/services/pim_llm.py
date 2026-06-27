@@ -27,6 +27,20 @@ PROMPT_VERSION = "yakson-ai-report-v2"
 DEFAULT_OPENAI_MODEL = "gpt-5.5"
 logger = logging.getLogger("uvicorn.error")
 
+_CAREGIVER_RULE_LABELS: dict[str, str] = {
+    "PRODUCT_INTERACTION": "병용 주의",
+    "INGREDIENT_INTERACTION": "성분 병용 주의",
+    "DUPLICATE_INGREDIENT": "성분 중복",
+    "DUPLICATE_EFFICACY": "효능 중복",
+    "DOSAGE_CAUTION": "용량 주의",
+    "DURATION_CAUTION": "복용기간 주의",
+    "ELDERLY_CAUTION": "고령자 주의",
+    "PREGNANCY_CAUTION": "임부 주의",
+    "LACTATION_CAUTION": "수유 주의",
+    "AGE_CONTRAINDICATION": "연령 주의",
+    "MATCHING_REVIEW": "약 정보 확인",
+}
+
 
 @dataclass(frozen=True)
 class ReportTextBundle:
@@ -181,7 +195,7 @@ def _template_caregiver_summary(patient, alerts, risk_count: int, caution_count:
     if total == 0:
         return (
             f"{alias}님의 복용 약에서는 현재 등재된 위험·주의 알림이 확인되지 않았습니다. "
-            f"별도 알림 없는 약은 {normal_count}개입니다. 새 약이 추가되거나 증상이 달라지면 "
+            f"특별한 문제로 표시되지 않은 약은 {normal_count}개입니다. 새 약이 추가되거나 증상이 달라지면 "
             "현재 약 목록을 약사·의사에게 보여주고 다시 확인하세요."
         )
 
@@ -190,7 +204,7 @@ def _template_caregiver_summary(patient, alerts, risk_count: int, caution_count:
         f"{alias}님의 복용 약에서 위험 {risk_count}건, 주의 {caution_count}건이 확인되었습니다.",
     ]
     if normal_count:
-        parts.append(f"별도 알림이 없는 약은 {normal_count}개입니다.")
+        parts.append(f"특별한 문제로 표시되지 않은 약은 {normal_count}개입니다.")
 
     if priority_alert_groups:
         alert_summaries = [_caregiver_alert_summary(alert, count=count) for alert, count in priority_alert_groups]
@@ -206,7 +220,10 @@ def _template_caregiver_summary(patient, alerts, risk_count: int, caution_count:
         None,
     )
     if pim_alert:
-        parts.append("고령자 주의 약은 졸림, 어지럼, 비틀거림, 혼동, 낙상 여부를 관찰해 상담 때 전달하세요.")
+        parts.append(
+            "'고령자 주의'는 어르신에게 특히 조심할 약이라는 뜻입니다. "
+            "졸림, 어지럼, 비틀거림, 혼동, 낙상 여부를 관찰해 상담 때 전달하세요."
+        )
 
     parts.append("복용을 임의로 중단하거나 조절하지 말고, 현재 약 목록과 이 결과를 약사·의사에게 보여주고 상담하세요.")
     return " ".join(part for part in parts if part).strip()
@@ -414,16 +431,17 @@ def _caregiver_alert_summary(alert, *, count: int = 1) -> str:
     related = _compact_related_medications(getattr(alert, "related_medications", []) or [])
     severity_label = "위험" if _severity_value(alert) == "RISK" else "주의"
     rule_type = _rule_type_value(alert)
+    label = _caregiver_rule_label(rule_type)
     if rule_type in {"PRODUCT_INTERACTION", "INGREDIENT_INTERACTION"}:
         basis_text = f" 관련 근거 {count}건으로 확인되었습니다." if count > 1 else " 확인되었습니다."
-        return f"{severity_label} 항목은 {related} 조합으로{basis_text} 같은 기간 복용 가능 여부를 먼저 확인하세요."
+        return f"{label}({severity_label}): {related} 조합으로{basis_text} 같은 기간 복용 가능 여부를 먼저 확인하세요."
     if rule_type in {"DUPLICATE_INGREDIENT", "DUPLICATE_EFFICACY"}:
-        return f"{related}는 중복 가능성이 있어 함께 복용해야 하는 처방인지 확인이 필요합니다."
+        return f"{label}({severity_label}): {related}는 중복 가능성이 있어 함께 복용해야 하는 처방인지 확인이 필요합니다."
     if rule_type in {"DOSAGE_CAUTION", "DURATION_CAUTION"}:
-        return f"{related}는 입력된 용량이나 복용 기간이 기준과 맞는지 확인해야 합니다."
+        return f"{label}({severity_label}): {related}는 입력된 용량이나 복용 기간이 기준과 맞는지 확인해야 합니다."
     if rule_type == "ELDERLY_CAUTION":
-        return f"{related}는 고령자 주의 항목입니다."
-    return f"{related}에 대해 {severity_label} 알림이 있습니다."
+        return f"{label}({severity_label}): {related}는 어르신에게 특히 조심할 약으로 표시되었습니다."
+    return f"{label}({severity_label}): {related}에 확인이 필요한 알림이 있습니다."
 
 
 def _pharmacist_alert_summary(alert, *, count: int = 1) -> str:
@@ -432,6 +450,10 @@ def _pharmacist_alert_summary(alert, *, count: int = 1) -> str:
     message = _truncate_text(str(getattr(alert, "message", "") or ""), limit=70)
     count_text = f" x{count}" if count > 1 else ""
     return f"{_severity_value(alert)}{count_text}/{_rule_type_value(alert)} {title}({related}) {message}".strip()
+
+
+def _caregiver_rule_label(rule_type: str) -> str:
+    return _CAREGIVER_RULE_LABELS.get(rule_type, "확인 필요")
 
 
 def _compact_related_medications(medications: list[str], *, limit: int = 2) -> str:
