@@ -20,7 +20,7 @@ from app.services.graph_analyzer import GraphAnalysisUnavailable, analyze_medica
 from app.services.rule_preview import build_preview_report, fetch_drug_for_validation
 
 router = APIRouter(prefix="/api", tags=["analysis-preview"])
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.get("/drugs/validate", response_model=DrugSearchItem, response_model_by_alias=True)
