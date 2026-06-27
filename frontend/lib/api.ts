@@ -56,6 +56,14 @@ type ApiMedication = {
   createdAt: string;
 };
 
+type ApiPrescriptionCategory = {
+  id: string;
+  prescriptionCategoryId: number;
+  categoryName: PrescriptionCategory;
+  displayOrder: number;
+  isActive: boolean;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
@@ -222,6 +230,11 @@ export async function deletePatientOnServer(patientId: string) {
 export async function listPatientMedications(patientId: string) {
   const result = await request<{ items: ApiMedication[] }>(`/api/patients/${patientId}/medications`);
   return result.items.map(toMedicationRecord);
+}
+
+export async function listPrescriptionCategories() {
+  const result = await request<{ items: ApiPrescriptionCategory[] }>("/api/prescription-categories");
+  return result.items.map((category) => category.categoryName);
 }
 
 export async function createMedicationOnServer(patientId: string, payload: MedicationCreateInput) {

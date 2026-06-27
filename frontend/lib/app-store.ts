@@ -23,6 +23,24 @@ export const prescriptionCategories: PrescriptionCategory[] = [
   "기타"
 ];
 
+export function mergePrescriptionCategories(...groups: PrescriptionCategory[][]) {
+  const seen = new Set<string>();
+  const result: PrescriptionCategory[] = [];
+
+  for (const group of groups) {
+    for (const category of group) {
+      const nextCategory = category.trim();
+      if (!nextCategory || seen.has(nextCategory)) {
+        continue;
+      }
+      seen.add(nextCategory);
+      result.push(nextCategory);
+    }
+  }
+
+  return result;
+}
+
 export function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 18)}`;
@@ -163,6 +181,7 @@ export function buildPatientReport(
       },
       medications: medications.map((medication) => ({
         enteredDrugName: medication.enteredDrugName,
+        categoryName: medication.category,
         productCode: medication.productCode,
         itemSeq: medication.itemSeq,
         productName: medication.matchedProductName,
@@ -178,7 +197,12 @@ export function buildPatientReport(
 }
 
 export function groupMedicationsByCategory(medications: MedicationRecord[]) {
-  return prescriptionCategories
+  const categories = mergePrescriptionCategories(
+    prescriptionCategories,
+    medications.map((medication) => medication.category)
+  );
+
+  return categories
     .map((category) => ({
       category,
       medications: medications.filter((medication) => medication.category === category)

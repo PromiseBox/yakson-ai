@@ -105,14 +105,7 @@ export type DrugSearchItem = {
   matchScore: number;
 };
 
-export type PrescriptionCategory =
-  | "정형외과"
-  | "내과"
-  | "외과"
-  | "성인병약"
-  | "당뇨약"
-  | "수면/신경안정"
-  | "기타";
+export type PrescriptionCategory = string;
 
 export type PatientRecord = {
   id: string;

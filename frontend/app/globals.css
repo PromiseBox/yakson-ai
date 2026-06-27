@@ -419,6 +419,67 @@ h3 {
   color: var(--green-dark);
 }
 
+.categoryPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.categoryTab {
+  min-width: 0;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.categoryTab span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 900;
+}
+
+.categoryTab small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.categoryTab.selected {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green-dark);
+}
+
+.categoryTab.selected small {
+  color: var(--green-dark);
+}
+
+.activeCategoryBar {
+  min-width: 0;
+  border: 1px solid rgba(15, 159, 110, 0.24);
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--green-dark);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.activeCategoryBar strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .patientCard,
 .reportPatientCard {
   min-width: 0;
