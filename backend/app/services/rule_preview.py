@@ -30,6 +30,8 @@ from app.models import (
 KST = timezone(timedelta(hours=9))
 ALERT_LIMIT_PER_RULE = 30
 SCHEMA = "yakson"
+MIN_KO_INGREDIENT_MATCH_LENGTH = 4
+MIN_EN_INGREDIENT_MATCH_LENGTH = 5
 
 
 @dataclass(frozen=True)
@@ -258,6 +260,28 @@ def _ingredients_by_product(products: list[SelectedProduct], db: Session) -> dic
     if not products:
         return {}
 
+    product_codes = [product.product_code for product in products]
+    grouped: dict[str, list[Mapping[str, object]]] = defaultdict(list)
+    seen: set[tuple[str, int]] = set()
+
+    def add_row(row: Mapping[str, object]) -> None:
+        ingredient_id = row["ingredient_id"]
+        if ingredient_id is None:
+            return
+        product_code = str(row["product_code"])
+        ingredient_id_int = int(ingredient_id)
+        key = (product_code, ingredient_id_int)
+        if key in seen:
+            return
+        seen.add(key)
+        grouped[product_code].append(
+            {
+                "product_code": product_code,
+                "ingredient_id": ingredient_id_int,
+                "ingredient_name": _clean_text(row["ingredient_name"], ingredient_id_int),
+            }
+        )
+
     rows = db.execute(
         text(
             f"""
@@ -270,12 +294,110 @@ def _ingredients_by_product(products: list[SelectedProduct], db: Session) -> dic
             order by dpi.product_code, ingredient_name
             """
         ).bindparams(bindparam("codes", expanding=True)),
-        {"codes": [product.product_code for product in products]},
+        {"codes": product_codes},
     ).mappings().all()
 
-    grouped: dict[str, list[Mapping[str, object]]] = defaultdict(list)
     for row in rows:
-        grouped[str(row["product_code"])].append(row)
+        add_row(row)
+
+    # Some source tables contain split ingredient IDs for the same canonical
+    # ingredient name. Add rule-facing aliases so safety/interaction rules still match.
+    alias_rows = db.execute(
+        text(
+            f"""
+            with selected_ingredients as (
+              select distinct dpi.product_code,
+                     i.ingredient_name_ko,
+                     i.canonical_name
+              from {SCHEMA}.drug_product_ingredient dpi
+              join {SCHEMA}.ingredient i on i.ingredient_id = dpi.ingredient_id
+              where dpi.product_code in :codes
+                and dpi.ingredient_id is not null
+                and (i.ingredient_name_ko is not null or i.canonical_name is not null)
+            ),
+            rule_ingredients as (
+              select ingredient_a_id as ingredient_id from {SCHEMA}.ingredient_interaction_rule
+              union
+              select ingredient_b_id as ingredient_id from {SCHEMA}.ingredient_interaction_rule
+              union
+              select ingredient_id from {SCHEMA}.ingredient_safety_rule
+            )
+            select si.product_code,
+                   i2.ingredient_id,
+                   coalesce(i2.ingredient_name_ko, i2.canonical_name) as ingredient_name
+            from selected_ingredients si
+            join {SCHEMA}.ingredient i2
+              on (
+                si.ingredient_name_ko is not null
+                and i2.ingredient_name_ko is not null
+                and lower(si.ingredient_name_ko) = lower(i2.ingredient_name_ko)
+              )
+              or (
+                si.canonical_name is not null
+                and i2.canonical_name is not null
+                and lower(si.canonical_name) = lower(i2.canonical_name)
+              )
+            join rule_ingredients ri on ri.ingredient_id = i2.ingredient_id
+            order by si.product_code, ingredient_name
+            """
+        ).bindparams(bindparam("codes", expanding=True)),
+        {"codes": product_codes},
+    ).mappings().all()
+    for row in alias_rows:
+        add_row(row)
+
+    # 제품-성분 매핑이 비어 있어도 제품명에 명확한 성분명이 포함된 경우가 있다.
+    # 예: 트라졸정(이트라코나졸고체분산체) -> 이트라코나졸
+    inferred_rows = db.execute(
+        text(
+            f"""
+            with selected_products as (
+              select product_code,
+                     lower(coalesce(product_name, '') || ' ' || coalesce(normalized_product_name, '')) as product_text
+              from {SCHEMA}.drug_product
+              where product_code in :codes
+            ),
+            rule_ingredients as (
+              select distinct i.ingredient_id,
+                     i.ingredient_name_ko,
+                     i.canonical_name,
+                     coalesce(i.ingredient_name_ko, i.canonical_name) as ingredient_name
+              from {SCHEMA}.ingredient i
+              join (
+                select ingredient_a_id as ingredient_id from {SCHEMA}.ingredient_interaction_rule
+                union
+                select ingredient_b_id as ingredient_id from {SCHEMA}.ingredient_interaction_rule
+                union
+                select ingredient_id from {SCHEMA}.ingredient_safety_rule
+              ) ri on ri.ingredient_id = i.ingredient_id
+            )
+            select sp.product_code,
+                   ri.ingredient_id,
+                   ri.ingredient_name
+            from selected_products sp
+            join rule_ingredients ri
+              on (
+                ri.ingredient_name_ko is not null
+                and char_length(trim(ri.ingredient_name_ko)) >= :min_ko_length
+                and sp.product_text like '%%' || lower(trim(ri.ingredient_name_ko)) || '%%'
+              )
+              or (
+                ri.canonical_name is not null
+                and char_length(trim(ri.canonical_name)) >= :min_en_length
+                and sp.product_text like '%%' || lower(trim(ri.canonical_name)) || '%%'
+              )
+            order by sp.product_code, ri.ingredient_name
+            """
+        ).bindparams(bindparam("codes", expanding=True)),
+        {
+            "codes": product_codes,
+            "min_ko_length": MIN_KO_INGREDIENT_MATCH_LENGTH,
+            "min_en_length": MIN_EN_INGREDIENT_MATCH_LENGTH,
+        },
+    ).mappings().all()
+    for row in inferred_rows:
+        add_row(row)
+
     return grouped
 
 

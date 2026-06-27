@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,9 +15,11 @@ from app.services.analysis_storage import (
     list_dashboard_reports,
     save_dashboard_report,
 )
+from app.services.graph_analyzer import GraphAnalysisUnavailable, analyze_medications_with_graph
 from app.services.rule_preview import build_preview_report, fetch_drug_for_validation
 
 router = APIRouter(prefix="/api", tags=["analysis-preview"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/drugs/validate", response_model=DrugSearchItem, response_model_by_alias=True)
@@ -38,6 +42,16 @@ def preview_analysis(
     payload: AnalyzeRequest,
     db: Session = Depends(get_db),
 ) -> AnalysisReport:
+    return _build_preferred_analysis_report(payload, db)
+
+
+def _build_preferred_analysis_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport:
+    try:
+        return analyze_medications_with_graph(payload, db)
+    except GraphAnalysisUnavailable as exc:
+        logger.warning("Neo4j graph analysis unavailable; falling back to rule preview: %s", exc)
+    except Exception:
+        logger.exception("Neo4j graph analysis failed unexpectedly; falling back to rule preview.")
     return build_preview_report(payload, db)
 
 
@@ -89,7 +103,7 @@ def _analysis_request_from_patient(patient_id: int, db: Session) -> AnalyzeReque
 )
 def run_and_save_latest_analysis(patient_id: int, db: Session = Depends(get_db)) -> AnalysisReport:
     payload = _analysis_request_from_patient(patient_id, db)
-    report = build_preview_report(payload, db)
+    report = _build_preferred_analysis_report(payload, db)
     return save_dashboard_report(db, patient_id, report)
 
 
