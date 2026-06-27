@@ -67,3 +67,23 @@ class ReportPayload(BaseModel):
     schedule: dict[str, list[str]] = Field(default_factory=dict)  # 아침/점심/저녁
     intervention_note: str = ""  # 약사 인계용 중재의견서(마크다운)
     eval_report: dict = Field(default_factory=dict)  # 출처/환각/금지어 검증 결과
+
+
+def to_analysis_summary(payload: "ReportPayload", unmatched_count: int = 0) -> dict:
+    """팀 yakson-ai 프론트(PR #4) 호환 포맷으로 변환 — 프론트가 갖다 붙이기만 하면 됨.
+
+    프론트는 AnalysisReport.summary.description(문자열)를 '분석 요약 설명문'으로 표시하고,
+    값이 있으면 복사 버튼을 노출한다. 여기서 description = LLM 보호자 요약(overall_message),
+    카운터는 룰값 그대로.
+    (PR #4: summary.{riskCount, cautionCount, normalCount, unmatchedMedicationCount, description})
+    """
+    c = payload.counts or {}
+    return {
+        "summary": {
+            "riskCount": int(c.get("위험", 0)),
+            "cautionCount": int(c.get("주의", 0)),
+            "normalCount": int(c.get("정상", 0)),
+            "unmatchedMedicationCount": int(unmatched_count),
+            "description": payload.overall_message or "",
+        }
+    }

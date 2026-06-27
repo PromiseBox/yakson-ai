@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from agents import comm
+from agents import comm, pim
 from domain.models import Conflict, PatientProfile, Severity
 from domain.report import GRADE_BY_SEVERITY, ReportItem, ReportMeta, ReportPayload
 
@@ -47,6 +47,11 @@ def build_report(state: dict) -> ReportPayload:
     """8노드 실행 결과(state)를 프론트용 ReportPayload로 조립."""
     profile: PatientProfile = state["profile"]
     conflicts: list[Conflict] = list(state.get("conflicts") or [])
+
+    # [C] 노인 부적절약물(PIM) 보강 — 식약처 노인주의가 놓친 PIM을 잠정 노인주의로 추가(출처 구분).
+    conflicts += pim.elderly_pim_conflicts(profile, conflicts)
+    _order = {Severity.HIGH: 0, Severity.MEDIUM: 1, Severity.LOW: 2}
+    conflicts.sort(key=lambda c: _order[c.severity])
 
     items: list[ReportItem] = [
         ReportItem(

@@ -224,7 +224,13 @@ def _template_narration(payload):
     high = payload.counts.get("위험", 0)
     msg = f"{payload.meta.alias} 복용 약을 점검한 결과, 확인이 필요한 항목 {len(items)}건이 발견됐어요."
     if high:
-        msg += f" 이 중 {high}건은 지금 약사·의사 확인을 권합니다."
+        msg += f" 이 중 {high}건은 지금 약사·의사 확인이 필요합니다."
+    # 가치포인트: 노인주의(PIM·낙상) 항목이 있으면 요약에 맥락 한 마디(출처 reason/tag 기반).
+    pim_it = next((it for it in items
+                   if it.flag_type.value == "노인주의" and "치매·낙상 위험" in it.tags), None)
+    if pim_it:
+        msg += f" 특히 {pim_it.drugs[0]} 등은 어르신에게 낙상·인지 주의가 필요합니다."
+    msg += " 처방·복용 변경은 직접 판단하지 말고 약사·의사와 상의하세요."
     payload.overall_message = msg
 
     lead_by_grade = {"위험": "지금 약사·의사에게 확인하세요", "주의": "한 번 확인해 보세요"}
