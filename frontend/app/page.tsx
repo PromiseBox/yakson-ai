@@ -41,7 +41,7 @@ export default function HomePage() {
 
         <section className="yk-styleguide-grid">
           <YkCard>
-            <YkSectionHeader title="핵심 점검 영역" subtitle="현재 구현된 룰 기반 분석 범위" icon={ShieldCheck} />
+            <YkSectionHeader title="어떤 점을 확인하나요?" subtitle="함께 복용할 때 살펴볼 주요 안전 항목" icon={ShieldCheck} />
             <div className="yk-product-feature-list">
               <div>
                 <span className="yk-product-feature-icon yk-feature-danger">
@@ -68,7 +68,7 @@ export default function HomePage() {
           </YkCard>
 
           <YkCard>
-            <YkSectionHeader title="안전 점검 3단계" subtitle="보호자가 따라가는 실제 사용 흐름" icon={BookOpen} />
+            <YkSectionHeader title="이렇게 확인해요" subtitle="복용 약을 등록하고 상담에 활용하는 순서" icon={BookOpen} />
             <div className="yk-product-steps">
               <div>
                 <span>01.</span>

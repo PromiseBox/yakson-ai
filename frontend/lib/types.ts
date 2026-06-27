@@ -74,12 +74,16 @@ export type AnalysisReport = {
     cautionCount: number;
     normalCount: number;
     unmatchedMedicationCount: number;
+    description?: string | null;
   };
   medications: MedicationResult[];
   sourceMedicationSnapshot?: MedicationInput[];
   alerts: AnalysisAlert[];
   caregiverGuidance: string;
   pharmacistHandoffText: string;
+  reportSummaryText?: string | null;
+  llmSummaryText?: string | null;
+  caregiverSummaryText?: string | null;
 };
 
 export type AnalysisReportHistoryItem = {

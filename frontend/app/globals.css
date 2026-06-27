@@ -566,6 +566,28 @@ h3 {
   gap: 12px;
 }
 
+.yk-report-summary-description {
+  border: 1px solid var(--yk-line);
+  border-radius: var(--yk-radius);
+  background: var(--yk-surface-soft);
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.yk-report-summary-description .yk-button {
+  justify-self: start;
+}
+
+.yk-report-summary-description p {
+  margin: 0;
+  color: var(--yk-text);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
 .summaryBox,
 .statCard {
   min-height: 86px;
@@ -1929,6 +1951,10 @@ h3 {
   font-weight: 800;
 }
 
+.yk-report-list-actions {
+  justify-content: flex-end;
+}
+
 .yk-drug-result {
   width: 100%;
   min-width: 0;
@@ -2474,6 +2500,13 @@ h3 {
 .yk-analysis-strip strong {
   color: var(--yk-text);
   font-weight: 900;
+}
+
+.yk-history-rerun {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  margin-bottom: 10px;
 }
 
 .yk-styleguide {

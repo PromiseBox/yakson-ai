@@ -66,6 +66,7 @@ export default function PatientDashboardPage() {
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [hasCopiedHandoff, setHasCopiedHandoff] = useState(false);
+  const [hasCopiedSummary, setHasCopiedSummary] = useState(false);
 
   useEffect(() => {
     async function loadPage() {
@@ -183,14 +184,25 @@ export default function PatientDashboardPage() {
     window.setTimeout(() => setHasCopiedHandoff(false), 1800);
   }
 
-  const summaryText = report ? buildSummaryText(report) : "";
+  async function copySummaryText() {
+    if (!summaryText) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(summaryText);
+    setHasCopiedSummary(true);
+    window.setTimeout(() => setHasCopiedSummary(false), 1800);
+  }
+
+  const llmSummaryText = report ? getLlmSummaryDescription(report) : "";
+  const summaryText = report ? llmSummaryText || buildFallbackSummaryText(report) : "";
   const dietWarningCount = dietGuides.filter((guide) => guide.severity !== "safe").length;
   const exerciseWarningCount = exerciseGuides.filter((guide) => guide.severity !== "safe").length;
   const hasLifestyleReport = dietWarningCount > 0 || exerciseWarningCount > 0;
 
   return (
     <AppShell
-      title="복약 분석 미리보기"
+      title="복약 분석"
       subtitle="조회 - 복약 안전 확인"
       action={
         <Link className="yk-button yk-button-secondary" href="/reports">
@@ -248,9 +260,11 @@ export default function PatientDashboardPage() {
                     등록된 약 정보를 바탕으로 함께 복용할 때 주의할 점을 확인하고 최신 리포트로 저장합니다.
                   </p>
                 </div>
-                <YkButton icon={Database} type="button" onClick={runPreview} disabled={isReportLoading}>
-                  {isReportLoading ? "분석 중" : report ? "다시 분석하기" : "분석하기"}
-                </YkButton>
+                {!report && (
+                  <YkButton icon={Database} type="button" onClick={runPreview} disabled={isReportLoading}>
+                    {isReportLoading ? "분석 중" : "분석하기"}
+                  </YkButton>
+                )}
               </div>
 
               {reportNotice && (
@@ -300,7 +314,19 @@ export default function PatientDashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <p className="subtext">{summaryText}</p>
+                  <div className="yk-report-summary-description">
+                    {llmSummaryText && (
+                      <button
+                        className="yk-button yk-button-secondary yk-button-compact"
+                        type="button"
+                        onClick={copySummaryText}
+                      >
+                        <Copy size={15} />
+                        {hasCopiedSummary ? "복사됨" : "복사하기"}
+                      </button>
+                    )}
+                    <p>{summaryText}</p>
+                  </div>
                 </div>
               ) : (
                 <p className="subtext">분석하기를 누르면 최신 리포트 요약이 저장되고 표시됩니다.</p>
@@ -442,6 +468,14 @@ export default function PatientDashboardPage() {
         </div>
       )}
       {!isLoading && patient && medications.length > 0 && (
+        <>
+        {report && (
+          <div className="yk-history-rerun">
+            <YkButton icon={Database} type="button" onClick={runPreview} disabled={isReportLoading}>
+              {isReportLoading ? "분석 중" : "다시 분석하기"}
+            </YkButton>
+          </div>
+        )}
         <section className="panel">
           <div className="sectionHeader">
             <div>
@@ -481,6 +515,7 @@ export default function PatientDashboardPage() {
             </div>
           )}
         </section>
+        </>
       )}
     </AppShell>
   );
@@ -542,7 +577,17 @@ function flattenEvidence(report: AnalysisReport | null) {
   );
 }
 
-function buildSummaryText(report: AnalysisReport) {
+function getLlmSummaryDescription(report: AnalysisReport) {
+  const llmDescription =
+    report.summary.description ||
+    report.reportSummaryText ||
+    report.llmSummaryText ||
+    report.caregiverSummaryText;
+
+  return llmDescription?.trim() || "";
+}
+
+function buildFallbackSummaryText(report: AnalysisReport) {
   const { riskCount, cautionCount, normalCount } = report.summary;
   const totalAlertCount = riskCount + cautionCount;
 
