@@ -29,7 +29,7 @@ env:
   OPENAI_MODEL: gpt-5.5
   LANGSMITH_SECRET_NAME: yakson-langsmith-api-key
   LANGSMITH_TRACING: "true"
-  LANGSMITH_PROJECT: yakson-ai-prod
+  LANGSMITH_PROJECT: yakson-ai-dev
   LANGSMITH_ENDPOINT: https://api.smith.langchain.com
   LANGSMITH_HIDE_INPUTS: "false"
   LANGSMITH_HIDE_OUTPUTS: "false"

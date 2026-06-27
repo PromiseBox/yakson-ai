@@ -39,7 +39,7 @@ NEO4J_DATABASE=neo4j
 LLM_SUMMARY_PROVIDER=openai
 OPENAI_MODEL=gpt-5.5
 LANGSMITH_TRACING=true
-LANGSMITH_PROJECT=yakson-ai-prod
+LANGSMITH_PROJECT=yakson-ai-dev
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 LANGSMITH_HIDE_INPUTS=false
 LANGSMITH_HIDE_OUTPUTS=false
@@ -60,7 +60,7 @@ LANGSMITH_API_KEY         -> yakson-langsmith-api-key (선택)
 OpenAI 문장 다듬기가 활성화된다.
 
 `yakson-langsmith-api-key` Secret이 있으면 OpenAI 리포트 문장 다듬기 호출이
-LangSmith 프로젝트 `yakson-ai-prod`로 전송된다. 트레이스 전송 전 사람 식별 값은
+LangSmith 프로젝트 `yakson-ai-dev`로 전송된다. 트레이스 전송 전 사람 식별 값은
 백엔드 마스킹 함수에서 가리고, 약 이름과 알림 근거 문장은 평가를 위해 보존한다.
 
 ## Frontend 환경변수
