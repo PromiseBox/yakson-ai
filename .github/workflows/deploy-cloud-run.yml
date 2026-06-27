@@ -21,6 +21,9 @@ env:
   DEPLOYER_SERVICE_ACCOUNT: yakson-deployer@promisebox-yakson.iam.gserviceaccount.com
   WORKLOAD_IDENTITY_PROVIDER: projects/331844024784/locations/global/workloadIdentityPools/github-actions/providers/yakson-ai
   CLOUDSQL_CONNECTION_NAME: promisebox-yakson:asia-northeast3:yakson-postgres
+  NEO4J_URI: bolt+s://2ce628a4.databases.neo4j.io
+  NEO4J_USERNAME: neo4j
+  NEO4J_DATABASE: neo4j
   BACKEND_URL: https://yakson-api-7p2ban445a-du.a.run.app
   FRONTEND_URL: https://yakson-web-7p2ban445a-du.a.run.app
 
@@ -64,7 +67,7 @@ jobs:
             --port 8080 \
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --add-cloudsql-instances "${CLOUDSQL_CONNECTION_NAME}" \
-            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL},NEO4J_ANALYSIS_ENABLED=true,NEO4J_URI=bolt+s://2ce628a4.databases.neo4j.io,NEO4J_USERNAME=neo4j,NEO4J_DATABASE=neo4j" \
+            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL},NEO4J_ANALYSIS_ENABLED=true,NEO4J_URI=${NEO4J_URI},NEO4J_USERNAME=${NEO4J_USERNAME},NEO4J_DATABASE=${NEO4J_DATABASE}" \
             --set-secrets "DATABASE_URL=yakson-database-url:latest,BACKEND_SHARED_SECRET=yakson-backend-shared-secret:latest,NEO4J_PASSWORD=yakson-neo4j-password:latest" \
             --allow-unauthenticated \
             --quiet

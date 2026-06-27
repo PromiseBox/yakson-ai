@@ -32,6 +32,10 @@ DATABASE_SCHEMA=yakson
 DATABASE_AUTO_CREATE=false
 DATABASE_CONNECT_TIMEOUT_SECONDS=5
 BACKEND_CORS_ORIGINS=https://YAKSON_WEB_URL
+NEO4J_ANALYSIS_ENABLED=true
+NEO4J_URI=bolt+s://YOUR_AURA_INSTANCE.databases.neo4j.io
+NEO4J_USERNAME=neo4j
+NEO4J_DATABASE=neo4j
 ```
 
 Secret Manager에서 주입할 값:
@@ -39,6 +43,7 @@ Secret Manager에서 주입할 값:
 ```text
 DATABASE_URL              -> yakson-database-url
 BACKEND_SHARED_SECRET     -> yakson-backend-shared-secret
+NEO4J_PASSWORD            -> yakson-neo4j-password
 ```
 
 ## Frontend 환경변수
@@ -104,4 +109,26 @@ curl -H "x-yakson-backend-secret: SHARED_SECRET" \
 - runtime service account에 Secret Manager accessor 권한 부여
 - Secret Manager에 `yakson-database-url` 생성 및 값 등록
 - Secret Manager에 `yakson-backend-shared-secret` 생성 및 값 등록
+- Secret Manager에 `yakson-neo4j-password` 생성 및 값 등록
 - 운영 DB 계정 생성 및 `yakson` schema/table 권한 부여
+
+Neo4j password secret 생성 예시:
+
+```bash
+printf '%s' 'YOUR_NEO4J_PASSWORD' | gcloud secrets create yakson-neo4j-password \
+  --project promisebox-yakson \
+  --replication-policy=automatic \
+  --data-file=-
+```
+
+Cloud Run runtime service account에 secret 접근 권한 부여:
+
+```bash
+gcloud secrets add-iam-policy-binding yakson-neo4j-password \
+  --project promisebox-yakson \
+  --member serviceAccount:yakson-runner@promisebox-yakson.iam.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+```
+
+Neo4j AuraDB는 `bolt+s://...` URI를 사용한다. `neo4j+s://...` 라우팅이 막히는
+Aura 환경에서도 `bolt+s://...`는 Cloud Run에서 직접 연결할 수 있다.
