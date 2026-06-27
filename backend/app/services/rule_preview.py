@@ -189,13 +189,21 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
     normal_count = sum(1 for product in products if product.product_name not in alerted_names)
     risk_count = sum(1 for alert in alerts if alert.severity == AlertSeverity.RISK)
     caution_count = sum(1 for alert in alerts if alert.severity == AlertSeverity.CAUTION)
+    report_texts = pim_llm.build_report_texts(
+        payload.patient,
+        alerts,
+        risk_count,
+        caution_count,
+        normal_count,
+        analysis_source=AnalysisSource.RULE_PREVIEW.value,
+    )
 
     return AnalysisReport(
         reportId=_new_id("preview"),
         generatedAt=datetime.now(KST).isoformat(),
         analysisSource=AnalysisSource.RULE_PREVIEW,
         patient=payload.patient,
-        summary=_build_summary(payload, alerts, risk_count, caution_count, normal_count),
+        summary=_build_summary(risk_count, caution_count, normal_count, report_texts),
         medications=[
             MedicationResult(
                 enteredDrugName=product.input_name,
@@ -211,6 +219,11 @@ def build_preview_report(payload: AnalyzeRequest, db: Session) -> AnalysisReport
             "위험 또는 주의 항목은 임의로 중단하지 말고 약사나 의사에게 확인하세요."
         ),
         pharmacistHandoffText=_build_handoff_text(payload, products, risk_count, caution_count),
+        caregiverSummaryText=report_texts.caregiver_summary,
+        pharmacistSummaryText=report_texts.pharmacist_summary,
+        aiSummarySource=report_texts.source,
+        aiModel=report_texts.model,
+        aiPromptVersion=report_texts.prompt_version,
     )
 
 
@@ -261,11 +274,10 @@ def _build_pim_alerts(
 
 
 def _build_summary(
-    payload: AnalyzeRequest,
-    alerts: list[AnalysisAlert],
     risk_count: int,
     caution_count: int,
     normal_count: int,
+    report_texts: pim_llm.ReportTextBundle,
 ) -> ReportSummary:
     """ReportSummary + LLM 보호자 요약(summary.description)."""
     summary = ReportSummary(
@@ -274,9 +286,7 @@ def _build_summary(
         normalCount=normal_count,
         unmatchedMedicationCount=0,
     )
-    summary.description = pim_llm.build_summary_description(
-        payload.patient, alerts, risk_count, caution_count, normal_count
-    )
+    summary.description = report_texts.caregiver_summary
     return summary
 
 

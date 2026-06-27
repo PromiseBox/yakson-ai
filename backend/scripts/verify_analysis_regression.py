@@ -71,6 +71,8 @@ def summary_dict(report: AnalysisReport) -> dict[str, Any]:
         "cautionCount": report.summary.caution_count,
         "normalCount": report.summary.normal_count,
         "unmatchedMedicationCount": report.summary.unmatched_medication_count,
+        "hasSummaryDescription": bool(report.summary.description),
+        "aiSummarySource": report.ai_summary_source,
     }
 
 
@@ -83,7 +85,13 @@ def assert_summary(
     caution: int,
     normal: int,
 ) -> None:
-    actual = summary_dict(report)
+    actual = {
+        "analysisSource": report.analysis_source.value,
+        "riskCount": report.summary.risk_count,
+        "cautionCount": report.summary.caution_count,
+        "normalCount": report.summary.normal_count,
+        "unmatchedMedicationCount": report.summary.unmatched_medication_count,
+    }
     expected = {
         "analysisSource": source.value,
         "riskCount": risk,
@@ -109,6 +117,21 @@ def assert_itra_simvastatin_graph_alerts(report: AnalysisReport, expected_count:
             "Itraconazole + simvastatin graph alert count mismatch. "
             f"expected={expected_count} actual={len(alerts)}"
         )
+
+
+def assert_ai_report_texts(label: str, report: AnalysisReport) -> None:
+    if not report.summary.description:
+        raise AssertionError(f"{label} missing summary.description.")
+    if not report.caregiver_summary_text:
+        raise AssertionError(f"{label} missing caregiverSummaryText.")
+    if not report.pharmacist_summary_text:
+        raise AssertionError(f"{label} missing pharmacistSummaryText.")
+    if report.summary.description != report.caregiver_summary_text:
+        raise AssertionError(f"{label} summary.description does not match caregiverSummaryText.")
+    if report.ai_summary_source not in {"TEMPLATE", "OPENAI"}:
+        raise AssertionError(f"{label} invalid aiSummarySource: {report.ai_summary_source}")
+    if report.ai_prompt_version != "yakson-ai-report-v1":
+        raise AssertionError(f"{label} invalid aiPromptVersion: {report.ai_prompt_version}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -148,6 +171,8 @@ def main() -> None:
         normal=args.expect_rule_normal,
     )
     assert_itra_simvastatin_graph_alerts(graph_report, args.expect_itra_simvastatin_risk)
+    assert_ai_report_texts("Graph", graph_report)
+    assert_ai_report_texts("Rule preview", rule_report)
 
     print(
         json.dumps(

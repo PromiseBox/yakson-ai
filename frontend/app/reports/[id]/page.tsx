@@ -178,11 +178,11 @@ export default function PatientDashboardPage() {
   }
 
   async function copyPharmacistHandoff() {
-    if (!report?.pharmacistHandoffText) {
+    if (!pharmacistSummaryText) {
       return;
     }
 
-    await navigator.clipboard.writeText(report.pharmacistHandoffText);
+    await navigator.clipboard.writeText(pharmacistSummaryText);
     setHasCopiedHandoff(true);
     window.setTimeout(() => setHasCopiedHandoff(false), 1800);
   }
@@ -199,6 +199,7 @@ export default function PatientDashboardPage() {
 
   const llmSummaryText = report ? getLlmSummaryDescription(report) : "";
   const summaryText = report ? llmSummaryText || buildFallbackSummaryText(report) : "";
+  const pharmacistSummaryText = report ? report.pharmacistSummaryText || report.pharmacistHandoffText : "";
   const dietWarningCount = dietGuides.filter((guide) => guide.severity !== "safe").length;
   const exerciseWarningCount = exerciseGuides.filter((guide) => guide.severity !== "safe").length;
   const hasLifestyleReport = dietWarningCount > 0 || exerciseWarningCount > 0;
@@ -439,7 +440,7 @@ export default function PatientDashboardPage() {
                     {hasCopiedHandoff ? "복사됨" : "복사하기"}
                   </button>
                 </div>
-                <p className="subtext">{report.pharmacistHandoffText}</p>
+                <p className="subtext">{pharmacistSummaryText}</p>
               </section>
             )}
 

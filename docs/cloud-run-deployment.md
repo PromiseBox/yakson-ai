@@ -36,6 +36,8 @@ NEO4J_ANALYSIS_ENABLED=true
 NEO4J_URI=bolt+s://YOUR_AURA_INSTANCE.databases.neo4j.io
 NEO4J_USERNAME=neo4j
 NEO4J_DATABASE=neo4j
+LLM_SUMMARY_PROVIDER=openai
+OPENAI_MODEL=gpt-5.5
 ```
 
 Secret Manager에서 주입할 값:
@@ -44,7 +46,12 @@ Secret Manager에서 주입할 값:
 DATABASE_URL              -> yakson-database-url
 BACKEND_SHARED_SECRET     -> yakson-backend-shared-secret
 NEO4J_PASSWORD            -> yakson-neo4j-password
+OPENAI_API_KEY            -> yakson-openai-api-key (선택)
 ```
+
+`yakson-openai-api-key` Secret이 없으면 배포 workflow는 해당 secret 주입을 건너뛰고
+백엔드는 템플릿 기반 AI 리포트 문구를 사용한다. Secret을 생성한 뒤 다음 배포부터
+OpenAI 문장 다듬기가 활성화된다.
 
 ## Frontend 환경변수
 
@@ -132,6 +139,31 @@ gcloud secrets add-iam-policy-binding yakson-neo4j-password \
 
 Neo4j AuraDB는 `bolt+s://...` URI를 사용한다. `neo4j+s://...` 라우팅이 막히는
 Aura 환경에서도 `bolt+s://...`는 Cloud Run에서 직접 연결할 수 있다.
+
+## AI 리포팅 설정
+
+Graph-first 분석 결과의 위험/주의/정상 판정은 Neo4j와 PostgreSQL 룰이 담당하고,
+AI는 보호자 요약과 약사 전달 요약의 문장 다듬기에만 사용한다. OpenAI 사용을 켜려면
+다음 Secret을 만든다.
+
+```bash
+printf '%s' 'YOUR_OPENAI_API_KEY' | gcloud secrets create yakson-openai-api-key \
+  --project promisebox-yakson \
+  --replication-policy=automatic \
+  --data-file=-
+```
+
+Cloud Run runtime service account에 secret 접근 권한 부여:
+
+```bash
+gcloud secrets add-iam-policy-binding yakson-openai-api-key \
+  --project promisebox-yakson \
+  --member serviceAccount:yakson-runner@promisebox-yakson.iam.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+```
+
+OpenAI 호출이 실패하거나 응답 형식이 맞지 않으면 리포트 생성은 실패하지 않고
+템플릿 요약으로 fallback된다.
 
 ## Neo4j Graph 재적재
 

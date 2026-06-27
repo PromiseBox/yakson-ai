@@ -5,3 +5,4 @@ python-dotenv>=1.0
 SQLAlchemy>=2.0
 psycopg[binary]>=3.2
 neo4j>=5.28
+openai>=1.93

@@ -86,6 +86,10 @@ export type AnalysisReport = {
   reportSummaryText?: string | null;
   llmSummaryText?: string | null;
   caregiverSummaryText?: string | null;
+  pharmacistSummaryText?: string | null;
+  aiSummarySource?: "OPENAI" | "TEMPLATE" | string | null;
+  aiModel?: string | null;
+  aiPromptVersion?: string | null;
 };
 
 export type AnalysisReportHistoryItem = {

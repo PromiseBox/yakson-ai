@@ -9,6 +9,7 @@ from neo4j import Driver, GraphDatabase
 from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from sqlalchemy.orm import Session
 
+from app.services import pim_llm
 from app.models import (
     AlertSeverity,
     AnalysisAlert,
@@ -24,6 +25,7 @@ from app.services.rule_preview import (
     KST,
     SelectedProduct,
     _dedupe_alerts,
+    _build_pim_alerts,
     _ingredient_safety_alert_for_row,
     _product_safety_alert_for_row,
     _resolve_products,
@@ -350,21 +352,35 @@ def analyze_medications_with_graph(payload: AnalyzeRequest, db: Session) -> Anal
     finally:
         driver.close()
 
+    alerts.extend(_build_pim_alerts(payload, list(products.values()), alerts))
+    alerts = _dedupe_alerts(alerts)
     alerted_names = {
         related_name
         for alert in alerts
         for related_name in alert.related_medications
     }
+    risk_count = sum(1 for alert in alerts if alert.severity == AlertSeverity.RISK)
+    caution_count = sum(1 for alert in alerts if alert.severity == AlertSeverity.CAUTION)
+    normal_count = sum(1 for product in products.values() if product.product_name not in alerted_names)
+    report_texts = pim_llm.build_report_texts(
+        payload.patient,
+        alerts,
+        risk_count,
+        caution_count,
+        normal_count,
+        analysis_source=AnalysisSource.GRAPH.value,
+    )
     return AnalysisReport(
         reportId=_new_graph_id("graph"),
         generatedAt=datetime.now(KST).isoformat(),
         analysisSource=AnalysisSource.GRAPH,
         patient=payload.patient,
         summary=ReportSummary(
-            riskCount=sum(1 for alert in alerts if alert.severity == AlertSeverity.RISK),
-            cautionCount=sum(1 for alert in alerts if alert.severity == AlertSeverity.CAUTION),
-            normalCount=sum(1 for product in products.values() if product.product_name not in alerted_names),
+            riskCount=risk_count,
+            cautionCount=caution_count,
+            normalCount=normal_count,
             unmatchedMedicationCount=0,
+            description=report_texts.caregiver_summary,
         ),
         medications=[
             MedicationResult(
@@ -381,6 +397,11 @@ def analyze_medications_with_graph(payload: AnalyzeRequest, db: Session) -> Anal
             "위험 또는 주의 항목은 임의로 중단하지 말고 약사나 의사에게 확인하세요."
         ),
         pharmacistHandoffText=_build_graph_handoff_text(payload, list(products.values()), alerts),
+        caregiverSummaryText=report_texts.caregiver_summary,
+        pharmacistSummaryText=report_texts.pharmacist_summary,
+        aiSummarySource=report_texts.source,
+        aiModel=report_texts.model,
+        aiPromptVersion=report_texts.prompt_version,
     )
 
 

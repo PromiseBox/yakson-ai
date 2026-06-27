@@ -133,6 +133,11 @@ class AnalysisReport(BaseModel):
     alerts: list[AnalysisAlert]
     caregiver_guidance: str = Field(alias="caregiverGuidance")
     pharmacist_handoff_text: str = Field(alias="pharmacistHandoffText")
+    caregiver_summary_text: str | None = Field(default=None, alias="caregiverSummaryText")
+    pharmacist_summary_text: str | None = Field(default=None, alias="pharmacistSummaryText")
+    ai_summary_source: str | None = Field(default=None, alias="aiSummarySource")
+    ai_model: str | None = Field(default=None, alias="aiModel")
+    ai_prompt_version: str | None = Field(default=None, alias="aiPromptVersion")
 
     class Config:
         populate_by_name = True
