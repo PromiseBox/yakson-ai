@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Pill, User } from "lucide-react";
+import { FileText, User } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -93,19 +93,15 @@ export default function ReportsPage() {
 
                 <p className="yk-product-card-copy">
                   {canAnalyze
-                    ? "DB에 저장된 식약처 등록 약물을 기준으로 룰 기반 분석 미리보기를 실행할 수 있습니다."
+                    ? "등록된 약을 바탕으로 함께 복용할 때 주의할 점을 확인할 수 있습니다."
                     : "약 정보 입력 화면에서 자동완성 결과를 선택해 분석 목록을 채워주세요."}
                 </p>
                 <p className="yk-product-card-copy">마지막 분석 {formatDateTime(latestAnalysisAt)}</p>
 
-                <div className="yk-card-meta">
+                <div className="yk-card-meta yk-report-list-actions">
                   <Link className="yk-button yk-button-primary yk-button-compact" href={`/reports/${patient.id}`}>
                     <FileText size={15} />
                     분석 화면
-                  </Link>
-                  <Link className="yk-button yk-button-secondary yk-button-compact" href={`/patients/${patient.id}/medications`}>
-                    <Pill size={15} />
-                    약 정보 입력
                   </Link>
                 </div>
               </YkCard>
