@@ -116,6 +116,8 @@ class ReportSummary(BaseModel):
     caution_count: int = Field(alias="cautionCount")
     normal_count: int = Field(alias="normalCount")
     unmatched_medication_count: int = Field(alias="unmatchedMedicationCount")
+    # LLM 보호자 요약(있으면 프론트가 분석 요약 설명문으로 표시 — PR #4). 없으면 프론트 기존 폴백.
+    description: str | None = Field(default=None)
 
 
 class AnalysisReport(BaseModel):
