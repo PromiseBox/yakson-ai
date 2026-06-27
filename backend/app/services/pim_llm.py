@@ -21,6 +21,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.services.langsmith_masking import maybe_wrap_openai_client
+
 PIM_SOURCE_NAME = "노인 부적절약물(PIM) 잠정 기준 — 약사 감수 필요"
 ELDERLY_AGE = 65
 PROMPT_VERSION = "yakson-ai-report-v2"
@@ -420,7 +422,9 @@ def _polish_with_openai(
 ) -> dict[str, Any]:
     from openai import OpenAI
 
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "8")))
+    client = maybe_wrap_openai_client(
+        OpenAI(api_key=os.environ["OPENAI_API_KEY"], timeout=float(os.getenv("OPENAI_TIMEOUT_SECONDS", "8")))
+    )
     fact_payload = {
         "patient": {
             "displayName": _patient_name(patient),
