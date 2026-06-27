@@ -175,26 +175,85 @@ def build_report_texts(
         )
 
 
+# 룰 종류 → 보호자용 짧은 라벨. 출처=rule_type(사실)의 '풀이'일 뿐, LLM이 지어내는 새 의학 주장이 아니다.
+_RULE_LABEL: dict[str, str] = {
+    "DOSAGE_CAUTION": "용량 주의",
+    "DURATION_CAUTION": "복용기간 주의",
+    "ELDERLY_CAUTION": "노인주의(낙상·졸림)",
+    "PRODUCT_INTERACTION": "병용 주의",
+    "INGREDIENT_INTERACTION": "성분 병용 주의",
+    "DUPLICATE_INGREDIENT": "성분 중복",
+    "DUPLICATE_EFFICACY": "효능 중복",
+    "PREGNANCY_CAUTION": "임부 주의",
+    "LACTATION_CAUTION": "수유 주의",
+    "AGE_CONTRAINDICATION": "연령 주의",
+    "MATCHING_REVIEW": "약 정보 확인",
+}
+_RULE_LABEL_DEFAULT = "확인 필요"
+
+
+def _caregiver_item_lines(alerts, limit: int = 3) -> list[str]:
+    """약별로 묶어 '약 — 라벨1, 라벨2' 한 줄(약·라벨 중복 제거). 최대 limit개 약 + '외 N개'."""
+    by_drug: dict[str, list[str]] = {}
+    order: list[str] = []
+    for alert in alerts:
+        drugs = getattr(alert, "related_medications", None) or [""]
+        drug = drugs[0]
+        label = _RULE_LABEL.get(_rule_type_value(alert), _RULE_LABEL_DEFAULT)
+        if drug not in by_drug:
+            by_drug[drug] = []
+            order.append(drug)
+        if label not in by_drug[drug]:
+            by_drug[drug].append(label)
+    lines: list[str] = []
+    for drug in order[:limit]:
+        labels = ", ".join(by_drug[drug])
+        lines.append(f"{drug} — {labels}" if drug else labels)
+    if len(order) > limit:
+        lines.append(f"외 약 {len(order) - limit}개는 아래 카드에서 확인하세요")
+    return lines
+
+
 def _template_caregiver_summary(patient, alerts, risk_count: int, caution_count: int, normal_count: int) -> str:
+    """보호자용 요약(쉽고 상세하게). 사실은 alerts/counts에서 오고, 말투·풀이만 입힌다.
+    줄바꿈 없는 한 단락(프론트가 <p>로 렌더). 진단·중단/감량 단정 없이 약사·의사 상의로 마무리.
+    """
     alias = _patient_name(patient)
+    age = getattr(patient, "age_years", None)
+    who = f"{alias}({age}세)" if age is not None else alias
+    alerted = {drug for alert in alerts for drug in (getattr(alert, "related_medications", None) or [])}
+    drug_count = normal_count + len(alerted)
+    med_phrase = f"복용 약 {drug_count}개를" if drug_count else "복용 약을"
     total = risk_count + caution_count
+
     if total == 0:
-        text = (f"{alias} 복용 약을 점검한 결과, 지금 등재된 위험·주의는 발견되지 않았습니다. "
+        return (f"{who} {med_phrase} 점검한 결과, 지금 등재된 위험·주의는 발견되지 않았습니다. "
+                f"나머지도 함께 복용에 특별한 문제는 보이지 않았어요. "
                 f"새로운 증상이 있으면 약사·의사와 상의하세요.")
-    else:
-        text = f"{alias} 복용 약을 점검한 결과, 확인이 필요한 항목 {total}건이 발견됐어요."
-        if risk_count:
-            text += f" 이 중 {risk_count}건은 지금 약사·의사 확인이 필요합니다."
-        # 가치포인트: 노인주의(낙상) 맥락 한 마디 — alerts의 사실에 기반(새 주장 아님).
-        pim_alert = next(
-            (a for a in alerts
-             if _rule_type_value(a) == "ELDERLY_CAUTION" and getattr(a, "related_medications", None)),
-            None,
+
+    head = f"{who} {med_phrase} 점검했어요. 확인이 필요한 항목 {total}건"
+    if risk_count:
+        head += f"(이 중 {risk_count}건은 지금 약사·의사 확인 필요)"
+    if normal_count:
+        head += f", 특별한 문제 없는 약 {normal_count}개"
+    head += "입니다."
+    parts = [head]
+
+    item_lines = _caregiver_item_lines(alerts)
+    if item_lines:
+        parts.append(" · ".join(item_lines) + ".")
+
+    if any(_rule_type_value(alert) == "ELDERLY_CAUTION" for alert in alerts):
+        parts.append(
+            "어르신은 밤에 일어나실 때 불을 켜고 천천히 부축해 주시고, 졸림·어지럼이 심하면 메모해 "
+            "두었다가 다음 약국 방문 때 약을 함께 보여주세요. "
+            "('노인주의'는 어르신께 특히 조심해야 하는 약이라는 뜻이에요.)"
         )
-        if pim_alert:
-            text += f" 특히 {pim_alert.related_medications[0]} 등은 어르신에게 낙상·인지 주의가 필요합니다."
-        text += " 처방·복용 변경은 직접 판단하지 말고 약사·의사와 상의하세요."
-    return text
+    else:
+        parts.append("이상 증상이 있으면 메모해 두었다가 다음 약국 방문 때 약을 함께 보여주세요.")
+
+    parts.append("약을 임의로 끊거나 줄이지 말고, 변경은 약사·의사와 상의하세요.")
+    return " ".join(parts)
 
 
 def _template_caregiver_detail(
