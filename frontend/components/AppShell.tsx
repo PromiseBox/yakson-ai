@@ -1,13 +1,16 @@
 "use client";
 
+import { Activity, BookOpen, FileText, Pill, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
 
+import { YkEmptyState, YkLoadingState } from "@/components/ui/design-system";
+
 const navItems = [
-  { href: "/", label: "홈", icon: "홈" },
-  { href: "/patients", label: "입력", icon: "+" },
-  { href: "/reports", label: "조회", icon: "표" }
+  { href: "/", label: "서비스 안내", icon: BookOpen },
+  { href: "/patients", label: "약 입력", icon: Plus },
+  { href: "/reports", label: "리포트", icon: FileText }
 ];
 
 function isActive(pathname: string, href: string) {
@@ -31,78 +34,55 @@ export function AppShell({
   const pathname = usePathname();
 
   return (
-    <div className="siteShell">
-      <aside className="sidebar" aria-label="주요 메뉴">
-        <Link className="brand" href="/">
-          <span className="brandMark">약</span>
+    <div className="yk-app-frame yk-product-shell">
+      <header className="yk-topbar">
+        <Link className="yk-brand" href="/">
+          <span className="yk-brand-mark">
+            <Pill size={20} />
+          </span>
           <span>
             <strong>약손 AI</strong>
-            <small>복약 안전 리포트</small>
+            <small>건강보험심사평가원·식약처 공공 데이터 기반</small>
           </span>
         </Link>
-        <nav className="sideNav">
+
+        <nav className="yk-tabs" aria-label="주요 메뉴">
           {navItems.map((item) => (
             <Link
-              className={`sideNavItem ${isActive(pathname, item.href) ? "active" : ""}`}
+              className={`yk-product-nav-link ${isActive(pathname, item.href) ? "is-active" : ""}`}
               href={item.href}
               key={item.href}
             >
-              <span>{item.icon}</span>
-              {item.label}
+              <item.icon size={15} />
+              <span>{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="sideNote">
-          <strong>안전 원칙</strong>
-          <span>식약처 기반 DB에서 선택된 약물만 분석하고, AI는 설명 보조로만 사용합니다.</span>
-        </div>
-      </aside>
+      </header>
 
-      <div className="mainArea">
-        <header className="mobileHeader">
-          <Link className="mobileBrand" href="/">
-            <span className="brandMark">약</span>
-            <strong>약손 AI</strong>
-          </Link>
-          {action}
-        </header>
-
+      <main className="yk-main">
         {(title || subtitle || action) && (
-          <div className="pageHeader">
+          <div className="yk-product-page-header">
             <div>
-              {subtitle && <p className="eyebrow">{subtitle}</p>}
+              {subtitle && <p>{subtitle}</p>}
               {title && <h1>{title}</h1>}
             </div>
-            <div className="desktopOnly">{action}</div>
+            {action}
           </div>
         )}
 
-        <main className="webContent">{children}</main>
-      </div>
+        <div className="yk-product-content">{children}</div>
+      </main>
 
-      <nav className="mobileNav" aria-label="하단 메뉴">
-        {navItems.map((item) => (
-          <Link
-            className={`mobileNavItem ${isActive(pathname, item.href) ? "active" : ""}`}
-            href={item.href}
-            key={item.href}
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
+      <footer className="yk-footer">
+        본 결과는 공식 DUR 데이터를 바탕으로 한 복약 보조 참고 정보이며, 의사·약사의 최종 판단을 대체할 수 없습니다.
+      </footer>
     </div>
   );
 }
 
 export function LoadingState() {
-  return (
-    <div className="emptyState">
-      <strong>불러오는 중</strong>
-      <p>화면 데이터를 확인하고 있습니다.</p>
-    </div>
-  );
+  return <YkLoadingState />;
 }
 
 export function EmptyState({
@@ -114,11 +94,5 @@ export function EmptyState({
   description: string;
   action?: ReactNode;
 }) {
-  return (
-    <div className="emptyState">
-      <strong>{title}</strong>
-      <p>{description}</p>
-      {action}
-    </div>
-  );
+  return <YkEmptyState title={title} description={description} action={action} />;
 }

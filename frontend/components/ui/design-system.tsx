@@ -413,14 +413,15 @@ export function YkMedicationEntryCard() {
 export function YkDrugSearchResultItem({
   productName,
   companyName,
-  code
-}: {
+  code,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
   productName: string;
   companyName: string;
   code: string;
 }) {
   return (
-    <button className="yk-drug-result" type="button">
+    <button className="yk-drug-result" type="button" {...props}>
       <span>
         <strong>{productName}</strong>
         <small>{companyName}</small>

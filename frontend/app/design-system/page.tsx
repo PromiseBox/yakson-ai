@@ -138,7 +138,7 @@ export default function DesignSystemPage() {
               />
               <YkErrorState
                 title="서버 연결에 실패했습니다"
-                description="백엔드 서버가 응답하지 않습니다. 잠시 뒤 다시 시도하거나 Cloud SQL 프록시와 API 서버 상태를 확인해주세요."
+                description="DB에 연결할 수 없습니다. 오류코드: ERR-DB-CONNECTION"
                 action={<YkButton variant="secondary">다시 시도</YkButton>}
               />
               <YkNoResultState
