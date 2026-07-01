@@ -1,9 +1,9 @@
 "use client";
 
-import { Database, FileText, Pencil, Pill, Plus, Trash2 } from "lucide-react";
+import { Database, FileText, Pencil, Pill, Plus, Trash2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AppShell, EmptyState, LoadingState } from "@/components/AppShell";
 import {
@@ -27,6 +27,7 @@ import {
 import {
   createMedicationOnServer,
   deleteMedicationOnServer,
+  extractMedicationCandidatesFromImage,
   getPatientById,
   listPrescriptionCategories,
   listPatientMedications,
@@ -35,10 +36,21 @@ import {
   validateDrug
 } from "@/lib/api";
 import { toUserErrorMessage } from "@/lib/error-messages";
-import { DrugSearchItem, MedicationRecord, PatientRecord, PrescriptionCategory } from "@/lib/types";
+import {
+  DrugSearchItem,
+  MedicationOcrCandidate,
+  MedicationRecord,
+  PatientRecord,
+  PrescriptionCategory
+} from "@/lib/types";
 
 const DEFAULT_CATEGORY = "내과";
 const CUSTOM_CATEGORY = "기타";
+
+type OcrCandidateView = MedicationOcrCandidate & {
+  matches: DrugSearchItem[];
+  matchError?: string;
+};
 
 function resolveCategoryName(category: PrescriptionCategory, customCategory: string) {
   if (category === CUSTOM_CATEGORY) {
@@ -78,6 +90,11 @@ export default function MedicationInputPage() {
   const [editDoseUnit, setEditDoseUnit] = useState("");
   const [editError, setEditError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [ocrFileName, setOcrFileName] = useState("");
+  const [ocrCandidates, setOcrCandidates] = useState<OcrCandidateView[]>([]);
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
+  const [ocrError, setOcrError] = useState("");
 
   useEffect(() => {
     void refreshPage();
@@ -179,6 +196,92 @@ export default function MedicationInputPage() {
     setSearchError("");
     setError("");
     setNotice("");
+  }
+
+  async function handleOcrFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setOcrError("JPG, PNG, WEBP 이미지 파일을 업로드해주세요.");
+      setOcrCandidates([]);
+      setOcrWarnings([]);
+      return;
+    }
+
+    setIsOcrProcessing(true);
+    setOcrFileName(file.name);
+    setOcrError("");
+    setOcrWarnings([]);
+    setOcrCandidates([]);
+    setNotice("");
+
+    try {
+      const result = await extractMedicationCandidatesFromImage(file);
+      const enrichedCandidates = await Promise.all(
+        result.candidates.map(async (candidate) => {
+          try {
+            const matches = await searchDrugs(candidate.enteredDrugName, 5);
+            return { ...candidate, matches };
+          } catch (caught) {
+            return {
+              ...candidate,
+              matches: [],
+              matchError: toUserErrorMessage(caught, "식약처 DB 검색에 실패했습니다.")
+            };
+          }
+        })
+      );
+      setOcrCandidates(enrichedCandidates);
+      setOcrWarnings(result.warnings);
+      if (enrichedCandidates.length === 0) {
+        setOcrError("약명 후보를 찾지 못했습니다. 더 선명한 사진으로 다시 시도하거나 약명을 직접 입력해주세요.");
+      }
+    } catch (caught) {
+      setOcrCandidates([]);
+      setOcrWarnings([]);
+      setOcrError(toUserErrorMessage(caught, "사진에서 약 정보를 읽지 못했습니다."));
+    } finally {
+      setIsOcrProcessing(false);
+    }
+  }
+
+  function applyOcrCandidate(candidate: OcrCandidateView, drug: DrugSearchItem) {
+    const nextCategoryName = candidate.categoryName?.trim();
+    if (nextCategoryName) {
+      if (categoryOptions.includes(nextCategoryName)) {
+        setCategory(nextCategoryName);
+        setCustomCategory("");
+      } else {
+        setCategory(CUSTOM_CATEGORY);
+        setCustomCategory(nextCategoryName);
+      }
+    }
+    setDrugName(drug.productName);
+    setSelectedDrug(drug);
+    setSearchResults([]);
+    setSearchError("");
+    setDurationDays(String(candidate.durationDays ?? 30));
+    setDosesPerDay(String(candidate.dosesPerDay ?? 1));
+    setDoseAmount(String(candidate.doseAmount ?? 1));
+    setDoseUnit(candidate.doseUnit?.trim() || "정");
+    setError("");
+    setNotice("OCR 후보를 입력폼에 불러왔습니다. 내용을 확인한 뒤 저장해주세요.");
+  }
+
+  function searchOcrCandidateManually(candidate: OcrCandidateView) {
+    setDrugName(candidate.enteredDrugName);
+    setSelectedDrug(null);
+    setSearchResults([]);
+    setDurationDays(String(candidate.durationDays ?? 30));
+    setDosesPerDay(String(candidate.dosesPerDay ?? 1));
+    setDoseAmount(String(candidate.doseAmount ?? 1));
+    setDoseUnit(candidate.doseUnit?.trim() || "정");
+    setError("");
+    setNotice("OCR 약명 후보를 검색창에 넣었습니다. 식약처 DB 결과를 선택해주세요.");
   }
 
   function handleDrugNameChange(value: string) {
@@ -410,6 +513,50 @@ export default function MedicationInputPage() {
             <YkNoticeBox title="등록 원칙" tone="brand" icon={Database}>
               약품은 식약처 기반 데이터베이스에서 확인된 품목을 검색해 선택할 수 있습니다.
             </YkNoticeBox>
+
+            <section className="yk-ocr-assist">
+              <div className="yk-ocr-assist-header">
+                <div>
+                  <strong>사진으로 입력 보조</strong>
+                  <p>약봉지나 처방전 사진에서 약명 후보를 읽고 식약처 DB 검색 결과로 연결합니다.</p>
+                </div>
+                <label className={`yk-button yk-button-secondary yk-button-compact ${isOcrProcessing ? "disabled" : ""}`}>
+                  <Upload size={15} />
+                  {isOcrProcessing ? "읽는 중" : "사진 업로드"}
+                  <input
+                    className="yk-file-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={isOcrProcessing}
+                    onChange={handleOcrFileChange}
+                  />
+                </label>
+              </div>
+
+              {ocrFileName && <p className="subtext">최근 파일 {ocrFileName}</p>}
+              {ocrError && (
+                <YkInlineAlert title="OCR 확인 필요" tone="caution">
+                  {ocrError}
+                </YkInlineAlert>
+              )}
+              {ocrWarnings.map((warning) => (
+                <YkInlineAlert title="OCR 안내" tone="caution" key={warning}>
+                  {warning}
+                </YkInlineAlert>
+              ))}
+              {ocrCandidates.length > 0 && (
+                <div className="yk-ocr-candidate-list">
+                  {ocrCandidates.map((candidate) => (
+                    <OcrCandidateCard
+                      candidate={candidate}
+                      key={candidate.candidateId}
+                      onApply={applyOcrCandidate}
+                      onManualSearch={searchOcrCandidateManually}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
 
             <form className="stack yk-product-form" onSubmit={submitMedication}>
               <CategorySelector
@@ -669,6 +816,63 @@ export default function MedicationInputPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function OcrCandidateCard({
+  candidate,
+  onApply,
+  onManualSearch
+}: {
+  candidate: OcrCandidateView;
+  onApply: (candidate: OcrCandidateView, drug: DrugSearchItem) => void;
+  onManualSearch: (candidate: OcrCandidateView) => void;
+}) {
+  return (
+    <article className="yk-ocr-candidate">
+      <header>
+        <div>
+          <strong>{candidate.enteredDrugName}</strong>
+          <p>{candidate.sourceLine}</p>
+        </div>
+        <YkStatusPill tone={candidate.needsReview ? "caution" : "safe"}>
+          {Math.round(candidate.confidence * 100)}%
+        </YkStatusPill>
+      </header>
+      <div className="yk-ocr-dose-row">
+        <span>{candidate.durationDays ? `${candidate.durationDays}일` : "일수 확인"}</span>
+        <span>{candidate.dosesPerDay ? `하루 ${candidate.dosesPerDay}회` : "횟수 확인"}</span>
+        <span>
+          {candidate.doseAmount ? `1회 ${candidate.doseAmount}${candidate.doseUnit ?? ""}` : "용량 확인"}
+        </span>
+      </div>
+
+      {candidate.matchError && (
+        <p className="yk-ocr-match-error">{candidate.matchError}</p>
+      )}
+
+      {candidate.matches.length > 0 ? (
+        <div className="yk-ocr-match-list">
+          {candidate.matches.slice(0, 3).map((drug) => (
+            <button
+              className="yk-ocr-match-button"
+              type="button"
+              key={`${candidate.candidateId}-${drug.productCode}-${drug.itemSeq}`}
+              onClick={() => onApply(candidate, drug)}
+            >
+              <strong>{drug.productName}</strong>
+              <span>
+                {drug.companyName || "업체명 없음"} · 제품코드 {drug.productCode || "-"}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <button className="yk-button yk-button-secondary yk-button-compact" type="button" onClick={() => onManualSearch(candidate)}>
+          약명으로 검색
+        </button>
+      )}
+    </article>
   );
 }
 

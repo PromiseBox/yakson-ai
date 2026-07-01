@@ -191,6 +191,26 @@ export type MedicationUpdateInput = Partial<MedicationCreateInput> & {
   status?: string;
 };
 
+export type MedicationOcrCandidate = {
+  candidateId: string;
+  enteredDrugName: string;
+  categoryName?: string | null;
+  durationDays?: number | null;
+  dosesPerDay?: number | null;
+  doseAmount?: number | null;
+  doseUnit?: string | null;
+  sourceLine: string;
+  confidence: number;
+  needsReview: boolean;
+};
+
+export type MedicationOcrResponse = {
+  provider: string;
+  rawText: string;
+  candidates: MedicationOcrCandidate[];
+  warnings: string[];
+};
+
 export type GuideSeverity = "avoid" | "caution" | "safe";
 
 export type DietGuide = {

@@ -4,6 +4,7 @@ import {
   AnalyzeRequest,
   DrugSearchItem,
   MedicationCreateInput,
+  MedicationOcrResponse,
   MedicationRecord,
   MedicationUpdateInput,
   PatientCreateInput,
@@ -154,6 +155,32 @@ export async function searchDrugs(query: string, limit = 15) {
     `/api/drugs/search?q=${encodeURIComponent(query)}&limit=${limit}`
   );
   return result.items;
+}
+
+export async function extractMedicationCandidatesFromImage(file: File) {
+  const formData = new FormData();
+  formData.set("file", file);
+
+  const response = await fetch(`${apiBaseUrl}/api/ocr/medications`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      }
+    } else {
+      message = (await response.text()) || message;
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  return response.json() as Promise<MedicationOcrResponse>;
 }
 
 export function validateDrug(productCode: string, itemSeq?: string | null) {

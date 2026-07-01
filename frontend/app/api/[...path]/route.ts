@@ -14,15 +14,19 @@ async function proxy(request: Request, context: RouteContext) {
   const targetUrl = `${backendBaseUrl}/api/${path.join("/")}${requestUrl.search}`;
   const method = request.method;
   const hasBody = !["GET", "HEAD"].includes(method);
+  const headers = backendHeaders({
+    Accept: request.headers.get("accept") ?? "application/json"
+  });
+  const contentType = request.headers.get("content-type");
+  if (contentType) {
+    headers.set("Content-Type", contentType);
+  }
 
   try {
     const response = await fetch(targetUrl, {
       method,
-      headers: backendHeaders({
-        Accept: request.headers.get("accept") ?? "application/json",
-        "Content-Type": request.headers.get("content-type") ?? "application/json"
-      }),
-      body: hasBody ? await request.text() : undefined,
+      headers,
+      body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store"
     });
 
