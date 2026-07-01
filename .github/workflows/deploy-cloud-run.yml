@@ -27,6 +27,12 @@ env:
   OPENAI_SECRET_NAME: yakson-openai-api-key
   LLM_SUMMARY_PROVIDER: openai
   OPENAI_MODEL: gpt-5.5
+  LANGSMITH_SECRET_NAME: yakson-langsmith-api-key
+  LANGSMITH_TRACING: "true"
+  LANGSMITH_PROJECT: yakson-ai-dev
+  LANGSMITH_ENDPOINT: https://api.smith.langchain.com
+  LANGSMITH_HIDE_INPUTS: "false"
+  LANGSMITH_HIDE_OUTPUTS: "false"
   OCR_PROVIDER: google_vision
   OCR_MAX_UPLOAD_MB: "8"
   OCR_TIMEOUT_SECONDS: "12"
@@ -69,6 +75,11 @@ jobs:
           else
             echo "OpenAI API key secret ${OPENAI_SECRET_NAME} not found; backend will use template AI summaries."
           fi
+          if gcloud secrets describe "${LANGSMITH_SECRET_NAME}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+            backend_secrets="${backend_secrets},LANGSMITH_API_KEY=${LANGSMITH_SECRET_NAME}:latest"
+          else
+            echo "LangSmith API key secret ${LANGSMITH_SECRET_NAME} not found; backend will run without LangSmith traces."
+          fi
           echo "BACKEND_SECRETS=${backend_secrets}" >> "${GITHUB_ENV}"
 
       - name: Deploy backend
@@ -83,7 +94,7 @@ jobs:
             --port 8080 \
             --service-account "${RUNTIME_SERVICE_ACCOUNT}" \
             --add-cloudsql-instances "${CLOUDSQL_CONNECTION_NAME}" \
-            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL},NEO4J_ANALYSIS_ENABLED=true,NEO4J_URI=${NEO4J_URI},NEO4J_USERNAME=${NEO4J_USERNAME},NEO4J_DATABASE=${NEO4J_DATABASE},LLM_SUMMARY_PROVIDER=${LLM_SUMMARY_PROVIDER},OPENAI_MODEL=${OPENAI_MODEL},OCR_PROVIDER=${OCR_PROVIDER},OCR_MAX_UPLOAD_MB=${OCR_MAX_UPLOAD_MB},OCR_TIMEOUT_SECONDS=${OCR_TIMEOUT_SECONDS}" \
+            --set-env-vars "DATABASE_SCHEMA=yakson,DATABASE_AUTO_CREATE=false,DATABASE_CONNECT_TIMEOUT_SECONDS=5,BACKEND_CORS_ORIGINS=${FRONTEND_URL},NEO4J_ANALYSIS_ENABLED=true,NEO4J_URI=${NEO4J_URI},NEO4J_USERNAME=${NEO4J_USERNAME},NEO4J_DATABASE=${NEO4J_DATABASE},LLM_SUMMARY_PROVIDER=${LLM_SUMMARY_PROVIDER},OPENAI_MODEL=${OPENAI_MODEL},LANGSMITH_TRACING=${LANGSMITH_TRACING},LANGSMITH_PROJECT=${LANGSMITH_PROJECT},LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT},LANGSMITH_HIDE_INPUTS=${LANGSMITH_HIDE_INPUTS},LANGSMITH_HIDE_OUTPUTS=${LANGSMITH_HIDE_OUTPUTS},OCR_PROVIDER=${OCR_PROVIDER},OCR_MAX_UPLOAD_MB=${OCR_MAX_UPLOAD_MB},OCR_TIMEOUT_SECONDS=${OCR_TIMEOUT_SECONDS}" \
             --set-secrets "${BACKEND_SECRETS}" \
             --allow-unauthenticated \
             --quiet

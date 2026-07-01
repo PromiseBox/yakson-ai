@@ -38,6 +38,11 @@ NEO4J_USERNAME=neo4j
 NEO4J_DATABASE=neo4j
 LLM_SUMMARY_PROVIDER=openai
 OPENAI_MODEL=gpt-5.5
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=yakson-ai-dev
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_HIDE_INPUTS=false
+LANGSMITH_HIDE_OUTPUTS=false
 ```
 
 Secret Manager에서 주입할 값:
@@ -47,11 +52,16 @@ DATABASE_URL              -> yakson-database-url
 BACKEND_SHARED_SECRET     -> yakson-backend-shared-secret
 NEO4J_PASSWORD            -> yakson-neo4j-password
 OPENAI_API_KEY            -> yakson-openai-api-key (선택)
+LANGSMITH_API_KEY         -> yakson-langsmith-api-key (선택)
 ```
 
 `yakson-openai-api-key` Secret이 없으면 배포 workflow는 해당 secret 주입을 건너뛰고
 백엔드는 템플릿 기반 AI 리포트 문구를 사용한다. Secret을 생성한 뒤 다음 배포부터
 OpenAI 문장 다듬기가 활성화된다.
+
+`yakson-langsmith-api-key` Secret이 있으면 OpenAI 리포트 문장 다듬기 호출이
+LangSmith 프로젝트 `yakson-ai-dev`로 전송된다. 트레이스 전송 전 사람 식별 값은
+백엔드 마스킹 함수에서 가리고, 약 이름과 알림 근거 문장은 평가를 위해 보존한다.
 
 ## Frontend 환경변수
 
@@ -157,6 +167,24 @@ Cloud Run runtime service account에 secret 접근 권한 부여:
 
 ```bash
 gcloud secrets add-iam-policy-binding yakson-openai-api-key \
+  --project promisebox-yakson \
+  --member serviceAccount:yakson-runner@promisebox-yakson.iam.gserviceaccount.com \
+  --role roles/secretmanager.secretAccessor
+```
+
+LangSmith tracing을 켜려면 다음 Secret을 만든다.
+
+```bash
+printf '%s' 'YOUR_LANGSMITH_API_KEY' | gcloud secrets create yakson-langsmith-api-key \
+  --project promisebox-yakson \
+  --replication-policy=automatic \
+  --data-file=-
+```
+
+Cloud Run runtime service account에 secret 접근 권한 부여:
+
+```bash
+gcloud secrets add-iam-policy-binding yakson-langsmith-api-key \
   --project promisebox-yakson \
   --member serviceAccount:yakson-runner@promisebox-yakson.iam.gserviceaccount.com \
   --role roles/secretmanager.secretAccessor
